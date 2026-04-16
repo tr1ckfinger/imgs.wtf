@@ -27,15 +27,18 @@ const albums = await getAlbums();
 <style>
   .grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 32px;
     padding-top: 8px;
   }
-  @media (max-width: 1024px) {
-    .grid { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 1200px) {
+    .grid { grid-template-columns: repeat(3, 1fr); gap: 24px; }
   }
-  @media (max-width: 600px) {
-    .grid { grid-template-columns: 1fr; gap: 12px; }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  }
+  @media (max-width: 480px) {
+    .grid { grid-template-columns: 1fr; gap: 16px; }
   }
   .card {
     position: relative;
@@ -50,17 +53,17 @@ const albums = await getAlbums();
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 400ms ease;
+    transition: filter 200ms ease;
   }
   .card:hover img {
-    transform: scale(1.02);
+    filter: brightness(0.92);
   }
   .title {
     position: absolute;
-    left: 20px;
-    bottom: 18px;
+    left: 16px;
+    bottom: 14px;
     color: #fff;
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 500;
     letter-spacing: -0.01em;
     text-shadow: 0 1px 18px rgba(0, 0, 0, 0.35);

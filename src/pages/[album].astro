@@ -20,19 +20,39 @@ const { album } = Astro.props;
     <span class="count">{album.images.length} images</span>
   </header>
 
-  <section class="masonry">
-    {album.images.map((img) => (
-      <figure>
-        <img
-          src={cldUrl(img.public_id, { w: 1400 })}
-          alt=""
-          loading="lazy"
-          width={img.width}
-          height={img.height}
-        />
-      </figure>
-    ))}
+  <section class="justified">
+    {album.images.map((img) => {
+      const aspect = img.width / img.height;
+      return (
+        <figure
+          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
+        >
+          <img
+            class="thumb"
+            src={cldUrl(img.public_id, { w: 1400 })}
+            data-full={cldUrl(img.public_id, { w: 2400 })}
+            alt=""
+            loading="lazy"
+            width={img.width}
+            height={img.height}
+          />
+        </figure>
+      );
+    })}
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
   </section>
+
+  <div id="lightbox" class="lightbox" aria-hidden="true">
+    <button id="lb-close" class="lb-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </button>
+    <img id="lb-img" alt="" />
+  </div>
 </Base>
 
 <style>
@@ -43,40 +63,287 @@ const { album } = Astro.props;
     padding: 24px 0 28px;
     flex-wrap: wrap;
   }
-  .back {
-    color: var(--muted);
-    font-size: 14px;
-  }
+  .back { color: var(--muted); font-size: 14px; }
   .back:hover { color: var(--fg); }
-  h1 {
+  h1 { margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.01em; }
+  .count { color: var(--muted); font-size: 14px; }
+
+  .justified {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    --row-h: 260px;
+  }
+  @media (max-width: 900px) { .justified { --row-h: 200px; gap: 6px; } }
+  @media (max-width: 500px) { .justified { --row-h: 150px; gap: 4px; } }
+  .justified figure {
     margin: 0;
-    font-size: 28px;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-  }
-  .count {
-    color: var(--muted);
-    font-size: 14px;
-  }
-  .masonry {
-    column-count: 3;
-    column-gap: 16px;
-  }
-  @media (max-width: 1024px) {
-    .masonry { column-count: 2; }
-  }
-  @media (max-width: 600px) {
-    .masonry { column-count: 1; column-gap: 12px; }
-  }
-  figure {
-    break-inside: avoid;
-    margin: 0 0 16px;
-  }
-  figure img {
-    width: 100%;
-    height: auto;
-    display: block;
+    overflow: hidden;
     border-radius: 3px;
     background: #f2f2f2;
+    min-width: 0;
+  }
+  .justified figure img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    cursor: pointer;
+    transition: filter 200ms ease;
+  }
+  .justified figure img:hover {
+    filter: brightness(0.92);
+  }
+  /* Phantom fillers so the last row keeps natural sizing instead of stretching. */
+  .justified .filler {
+    flex-grow: 1000000000;
+    flex-basis: 0;
+    content: '';
+    height: 0;
+  }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 100;
+    padding: 40px;
+    backdrop-filter: blur(0px);
+    transition: background 360ms ease, backdrop-filter 360ms ease;
+  }
+  .lightbox.open, .lightbox.closing {
+    display: flex;
+  }
+  .lightbox.open {
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(12px);
+  }
+  .lightbox.closing {
+    background: rgba(255, 255, 255, 0);
+    backdrop-filter: blur(0px);
+  }
+  .lightbox.open.zoomed {
+    display: block;
+    overflow: auto;
+    padding: 0;
+    cursor: zoom-out;
+  }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: zoom-in;
+    display: block;
+  }
+  .lightbox.zoomed img {
+    max-width: none;
+    max-height: none;
+    cursor: zoom-out;
+  }
+  .lb-close {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(0, 0, 0, 0.06);
+    color: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 101;
+    transition: background 150ms ease;
+  }
+  .lb-close:hover { background: rgba(0, 0, 0, 0.12); }
+
+  @media (max-width: 700px) {
+    .lightbox { padding: 16px; }
+    .lb-close {
+      top: auto;
+      bottom: 24px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      background: rgba(0, 0, 0, 0.08);
+    }
   }
 </style>
+
+<script>
+  const lightbox = document.getElementById('lightbox') as HTMLDivElement;
+  const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+  const lbClose = document.getElementById('lb-close') as HTMLButtonElement;
+  const thumbs = document.querySelectorAll<HTMLImageElement>('img.thumb');
+
+  let sourceEl: HTMLImageElement | null = null;
+  let isOpen = false;
+  let zoomed = false;
+
+  const ZOOM_FACTOR = 3.5;
+
+  function openLightbox(thumb: HTMLImageElement) {
+    if (isOpen) return;
+    sourceEl = thumb;
+
+    // Use the already-loaded thumbnail src for instant display.
+    lbImg.src = thumb.currentSrc || thumb.src;
+
+    const from = thumb.getBoundingClientRect();
+    lightbox.classList.add('open');
+    lightbox.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    requestAnimationFrame(() => runFlip(from, 'open'));
+
+    // Swap in higher-res version in the background if available.
+    const full = thumb.dataset.full;
+    if (full && full !== lbImg.src) {
+      const pre = new Image();
+      pre.onload = () => {
+        if (isOpen && sourceEl === thumb && !zoomed) lbImg.src = full;
+      };
+      pre.src = full;
+    }
+
+    isOpen = true;
+  }
+
+  function runFlip(from: DOMRect, direction: 'open' | 'close') {
+    const to = lbImg.getBoundingClientRect();
+    if (to.width === 0 || to.height === 0) return;
+
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+    const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    // Use uniform scale based on width to avoid distortion.
+    const s = from.width / to.width;
+
+    const fromKF = { transform: `translate(${dx}px, ${dy}px) scale(${s})` };
+    const toKF = { transform: 'translate(0, 0) scale(1)' };
+
+    const opening = direction === 'open';
+    return lbImg.animate(
+      opening ? [fromKF, toKF] : [toKF, fromKF],
+      {
+        duration: opening ? 320 : 260,
+        easing: opening
+          ? 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+          : 'cubic-bezier(0.4, 0, 0.2, 1)',
+      }
+    );
+  }
+
+  function closeLightbox() {
+    if (!isOpen) return;
+    resetZoom();
+
+    // Start backdrop fade-out in parallel with the image flip.
+    lightbox.classList.remove('open');
+    lightbox.classList.add('closing');
+    lightbox.setAttribute('aria-hidden', 'true');
+
+    const doClose = () => {
+      lightbox.classList.remove('closing');
+      document.body.style.overflow = '';
+      lbImg.src = '';
+      lbImg.style.width = '';
+      lbImg.style.height = '';
+      sourceEl = null;
+      isOpen = false;
+    };
+
+    if (!sourceEl) {
+      setTimeout(doClose, 360);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const thumbRect = sourceEl!.getBoundingClientRect();
+      const anim = runFlip(thumbRect, 'close');
+      if (anim) anim.onfinish = doClose;
+      else doClose();
+    });
+  }
+
+  function resetZoom() {
+    if (!zoomed) return;
+    zoomed = false;
+    lightbox.classList.remove('zoomed');
+    lbImg.style.width = '';
+    lbImg.style.height = '';
+    lightbox.scrollTop = 0;
+    lightbox.scrollLeft = 0;
+  }
+
+  function zoomIn(x: number, y: number) {
+    const rect = lbImg.getBoundingClientRect();
+    const relX = (x - rect.left) / rect.width;
+    const relY = (y - rect.top) / rect.height;
+
+    const newWidth = rect.width * ZOOM_FACTOR;
+    const newHeight = rect.height * ZOOM_FACTOR;
+
+    lbImg.style.width = `${newWidth}px`;
+    lbImg.style.height = `${newHeight}px`;
+    lightbox.classList.add('zoomed');
+    zoomed = true;
+
+    requestAnimationFrame(() => {
+      lightbox.scrollLeft = relX * newWidth - x;
+      lightbox.scrollTop = relY * newHeight - y;
+    });
+  }
+
+  function toggleZoom(x: number, y: number) {
+    if (zoomed) resetZoom();
+    else zoomIn(x, y);
+  }
+
+  // Attach thumbnail clicks
+  thumbs.forEach((thumb) => {
+    thumb.addEventListener('click', () => openLightbox(thumb));
+  });
+
+  // Close on Esc
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isOpen) closeLightbox();
+  });
+
+  lbClose.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeLightbox();
+  });
+
+  // Click outside the image (on the backdrop) closes
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  // Click image to zoom in/out (desktop)
+  lbImg.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleZoom(e.clientX, e.clientY);
+  });
+
+  // Double-tap to zoom (mobile)
+  let lastTouch = 0;
+  lbImg.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 0) return;
+    const t = e.changedTouches[0];
+    const now = Date.now();
+    if (now - lastTouch < 320) {
+      toggleZoom(t.clientX, t.clientY);
+      e.preventDefault();
+      lastTouch = 0;
+      return;
+    }
+    lastTouch = now;
+  }, { passive: false });
+</script>
