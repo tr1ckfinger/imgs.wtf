@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+import { getAlbums, cldUrl } from '../lib/cloudinary';
+
+export async function getStaticPaths() {
+  const albums = await getAlbums();
+  return albums.map((album) => ({
+    params: { album: album.slug },
+    props: { album },
+  }));
+}
+
+const { album } = Astro.props;
+---
+
+<Base title={`${album.title} — imgs.wtf`}>
+  <header class="album-head">
+    <a href="/" class="back">← back</a>
+    <h1>{album.title}</h1>
+    <span class="count">{album.images.length} images</span>
+  </header>
+
+  <section class="masonry">
+    {album.images.map((img) => (
+      <figure>
+        <img
+          src={cldUrl(img.public_id, { w: 1400 })}
+          alt=""
+          loading="lazy"
+          width={img.width}
+          height={img.height}
+        />
+      </figure>
+    ))}
+  </section>
+</Base>
+
+<style>
+  .album-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 24px 0 28px;
+    flex-wrap: wrap;
+  }
+  .back {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .back:hover { color: var(--fg); }
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .count {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .masonry {
+    column-count: 3;
+    column-gap: 16px;
+  }
+  @media (max-width: 1024px) {
+    .masonry { column-count: 2; }
+  }
+  @media (max-width: 600px) {
+    .masonry { column-count: 1; column-gap: 12px; }
+  }
+  figure {
+    break-inside: avoid;
+    margin: 0 0 16px;
+  }
+  figure img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 3px;
+    background: #f2f2f2;
+  }
+</style>
