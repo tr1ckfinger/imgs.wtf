@@ -13,13 +13,10 @@ export async function getStaticPaths() {
 const { album } = Astro.props;
 ---
 
-<Base title={`${album.title} — imgs.wtf`}>
-  <header class="album-head">
-    <a href="/" class="back">← back</a>
-    <h1>{album.title}</h1>
-    <span class="count">{album.images.length} images</span>
-  </header>
-
+<Base
+  title={`${album.title} — imgs.wtf`}
+  albumHeader={{ title: album.title, backHref: '/', count: album.images.length }}
+>
   <section class="justified">
     {album.images.map((img) => {
       const aspect = img.width / img.height;
@@ -56,19 +53,8 @@ const { album } = Astro.props;
 </Base>
 
 <style>
-  .album-head {
-    display: flex;
-    align-items: baseline;
-    gap: 16px;
-    padding: 24px 0 28px;
-    flex-wrap: wrap;
-  }
-  .back { color: var(--muted); font-size: 14px; }
-  .back:hover { color: var(--fg); }
-  h1 { margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.01em; }
-  .count { color: var(--muted); font-size: 14px; }
-
   .justified {
+    padding-top: 8px;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;

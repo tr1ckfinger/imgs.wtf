@@ -62,7 +62,9 @@ async function listImagesInFolder(folder: string): Promise<CldImage[]> {
   }));
 }
 
-export async function getAlbums(): Promise<Album[]> {
+let albumsPromise: Promise<Album[]> | null = null;
+
+async function fetchAlbums(): Promise<Album[]> {
   const folders = await listFolders();
   const albums: Album[] = [];
 
@@ -81,6 +83,16 @@ export async function getAlbums(): Promise<Album[]> {
   }
 
   return albums;
+}
+
+export async function getAlbums(): Promise<Album[]> {
+  if (!albumsPromise) {
+    albumsPromise = fetchAlbums().catch((err) => {
+      albumsPromise = null; // allow retry on failure
+      throw err;
+    });
+  }
+  return albumsPromise;
 }
 
 export function cldUrl(

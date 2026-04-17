@@ -1,8 +1,9 @@
 ---
 interface Props {
   title?: string;
+  albumHeader?: { title: string; backHref: string; count: number };
 }
-const { title = 'imgs.wtf' } = Astro.props;
+const { title = 'imgs.wtf', albumHeader } = Astro.props;
 ---
 
 <!doctype html>
@@ -24,8 +25,22 @@ const { title = 'imgs.wtf' } = Astro.props;
   <body>
     <header class="nav">
       <div class="nav-inner">
-        <a href="/" class="brand">simon lürwer</a>
-        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
+        <div class="nav-left">
+          {albumHeader ? (
+            <Fragment>
+              <a href={albumHeader.backHref} class="back-arrow" aria-label="Back">←</a>
+              <span class="brand">{albumHeader.title}</span>
+            </Fragment>
+          ) : (
+            <a href="/" class="brand">simon lürwer</a>
+          )}
+        </div>
+        <div class="nav-center">
+          {albumHeader && <span class="count">{albumHeader.count} images</span>}
+        </div>
+        <div class="nav-right">
+          <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
+        </div>
       </div>
     </header>
     <main>
@@ -101,14 +116,46 @@ const { title = 'imgs.wtf' } = Astro.props;
         max-width: 1400px;
         margin: 0 auto;
         padding: 20px 24px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 16px;
+      }
+      .nav-left {
+        position: relative;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        min-width: 0;
+      }
+      .nav-center {
+        justify-self: center;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .nav-right {
+        justify-self: end;
       }
       .brand {
         font-weight: 600;
         letter-spacing: -0.01em;
         font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .back-arrow {
+        position: absolute;
+        right: calc(100% + 20px);
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--fg);
+        font-size: 18px;
+        line-height: 1;
+        font-weight: 400;
+        transition: opacity 150ms ease;
+      }
+      .back-arrow:hover {
+        opacity: 0.6;
       }
       .theme-toggle {
         width: 12px;
