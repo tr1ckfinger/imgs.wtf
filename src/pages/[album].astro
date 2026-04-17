@@ -18,11 +18,14 @@ const { album } = Astro.props;
   albumHeader={{ title: album.title, backHref: '/', count: album.images.length }}
 >
   <section class="justified">
-    {album.images.map((img) => {
+    {album.images.map((img, i) => {
       const aspect = img.width / img.height;
+      const center = (album.images.length - 1) / 2;
+      const delay = Math.abs(i - center) * 55;
       return (
         <figure
-          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
+          class="drop-in"
+          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect}; animation-delay: ${delay}ms;`}
         >
           <img
             class="thumb"
