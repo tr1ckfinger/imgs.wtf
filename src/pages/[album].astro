@@ -71,11 +71,11 @@ const { album } = Astro.props;
   .justified {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    --row-h: 260px;
+    gap: 18px;
+    --row-h: 320px;
   }
-  @media (max-width: 900px) { .justified { --row-h: 200px; gap: 6px; } }
-  @media (max-width: 500px) { .justified { --row-h: 150px; gap: 4px; } }
+  @media (max-width: 900px) { .justified { --row-h: 240px; gap: 14px; } }
+  @media (max-width: 500px) { .justified { --row-h: 180px; gap: 10px; } }
   .justified figure {
     margin: 0;
     overflow: hidden;
