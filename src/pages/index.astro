@@ -7,14 +7,10 @@ const albums = await getAlbums();
 
 <Base title="imgs.wtf">
   <section class="grid">
-    {albums.map((album, i) => {
-      const center = (albums.length - 1) / 2;
-      const delay = Math.abs(i - center) * 90;
-      return (
+    {albums.map((album) => (
       <a
         href={`/${album.slug}`}
         class="card drop-in"
-        style={`animation-delay: ${delay}ms`}
       >
         <img
           class="img-fade"
@@ -24,8 +20,7 @@ const albums = await getAlbums();
         />
         <span class="title">{album.title}</span>
       </a>
-      );
-    })}
+    ))}
   </section>
 
   {albums.length === 0 && (
