@@ -22,7 +22,7 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       })();
     </script>
   </head>
-  <body>
+  <body data-sync-fade={albumHeader ? 'false' : 'true'}>
     <header class="nav">
       <div class="nav-inner">
         <div class="nav-left">
@@ -79,23 +79,28 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
             { duration: 1000, easing: 'ease-out', fill: 'both' }
           );
         };
+        const whenDecoded = (img, cb) => {
+          if (typeof img.decode === 'function') img.decode().then(cb, cb);
+          else cb();
+        };
         const readyFor = (img) => new Promise((resolve) => {
-          const decode = () => {
-            if (typeof img.decode === 'function') img.decode().then(resolve, resolve);
-            else resolve();
-          };
           if (img.complete && img.naturalWidth > 0) {
-            decode();
+            whenDecoded(img, resolve);
           } else {
-            img.addEventListener('load', decode, { once: true });
+            img.addEventListener('load', () => whenDecoded(img, resolve), { once: true });
             img.addEventListener('error', () => resolve(), { once: true });
           }
         });
         const imgs = Array.from(document.querySelectorAll('img.img-fade'));
-        if (imgs.length) {
+        const sync = document.body.dataset.syncFade === 'true';
+        if (sync && imgs.length) {
+          // Index page: wait for every image, then fade them all together.
           Promise.all(imgs.map(readyFor)).then(() => {
             imgs.forEach(playFade);
           });
+        } else {
+          // Album page: fade each image in as soon as it's ready.
+          imgs.forEach((img) => readyFor(img).then(() => playFade(img)));
         }
       })();
     </script>
