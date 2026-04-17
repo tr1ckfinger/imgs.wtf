@@ -24,7 +24,7 @@ const { title = 'imgs.wtf' } = Astro.props;
   <body>
     <header class="nav">
       <div class="nav-inner">
-        <a href="/" class="brand">imgs.wtf</a>
+        <a href="/" class="brand">simon lürwer</a>
         <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
       </div>
     </header>
@@ -61,6 +61,7 @@ const { title = 'imgs.wtf' } = Astro.props;
         --lightbox-bg: rgba(255, 255, 255, 0.96);
         --btn-bg: rgba(0, 0, 0, 0.06);
         --btn-bg-hover: rgba(0, 0, 0, 0.12);
+        --img-hover: 0.85;
       }
       :root[data-theme='dark'] {
         --bg: #0c0c0f;
@@ -71,6 +72,7 @@ const { title = 'imgs.wtf' } = Astro.props;
         --lightbox-bg: rgba(12, 12, 15, 0.96);
         --btn-bg: rgba(255, 255, 255, 0.08);
         --btn-bg-hover: rgba(255, 255, 255, 0.16);
+        --img-hover: 1.18;
       }
       * {
         box-sizing: border-box;
