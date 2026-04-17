@@ -46,13 +46,13 @@ const { album } = Astro.props;
   </section>
 
   <div id="lightbox" class="lightbox" aria-hidden="true">
-    <button id="lb-close" class="lb-close" aria-label="Close">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-      </svg>
-    </button>
     <img id="lb-img" alt="" />
   </div>
+  <button id="lb-close" class="lb-close" aria-label="Close">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </svg>
+  </button>
 </Base>
 
 <style>
@@ -155,12 +155,17 @@ const { album } = Astro.props;
     border: none;
     background: var(--btn-bg);
     color: var(--fg);
-    display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 101;
-    transition: background 150ms ease;
+    z-index: 200;
+    transition: background 150ms ease, opacity 200ms ease;
+    display: none;
+    opacity: 0;
+  }
+  .lb-close.visible {
+    display: flex;
+    opacity: 1;
   }
   .lb-close:hover { background: var(--btn-bg-hover); }
 
@@ -168,7 +173,7 @@ const { album } = Astro.props;
     .lightbox { padding: 16px; }
     .lb-close {
       top: auto;
-      bottom: 24px;
+      bottom: max(24px, env(safe-area-inset-bottom, 0));
       right: 20px;
       width: 52px;
       height: 52px;
@@ -187,6 +192,7 @@ const { album } = Astro.props;
   let zoomed = false;
 
   const ZOOM_FACTOR = 3.5;
+  const isTouchDevice = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
   function openLightbox(thumb: HTMLImageElement) {
     if (isOpen) return;
@@ -197,6 +203,7 @@ const { album } = Astro.props;
 
     const from = thumb.getBoundingClientRect();
     lightbox.classList.add('open');
+    lbClose.classList.add('visible');
     lightbox.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
 
@@ -246,6 +253,7 @@ const { album } = Astro.props;
     // Start backdrop fade-out in parallel with the image flip.
     lightbox.classList.remove('open');
     lightbox.classList.add('closing');
+    lbClose.classList.remove('visible');
     lightbox.setAttribute('aria-hidden', 'true');
 
     const doClose = () => {
@@ -325,9 +333,10 @@ const { album } = Astro.props;
     if (e.target === lightbox) closeLightbox();
   });
 
-  // Click image to zoom in/out (desktop)
+  // Click image to zoom in/out (desktop only; mobile uses double-tap)
   lbImg.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (isTouchDevice) return;
     toggleZoom(e.clientX, e.clientY);
   });
 
