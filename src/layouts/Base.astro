@@ -79,21 +79,24 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
             { duration: 1000, easing: 'ease-out', fill: 'both' }
           );
         };
-        const onReady = (img) => {
-          if (typeof img.decode === 'function') {
-            img.decode().then(() => playFade(img)).catch(() => playFade(img));
-          } else {
-            playFade(img);
-          }
-        };
-        document.querySelectorAll('img.img-fade').forEach((img) => {
+        const readyFor = (img) => new Promise((resolve) => {
+          const decode = () => {
+            if (typeof img.decode === 'function') img.decode().then(resolve, resolve);
+            else resolve();
+          };
           if (img.complete && img.naturalWidth > 0) {
-            onReady(img);
+            decode();
           } else {
-            img.addEventListener('load', () => onReady(img), { once: true });
-            img.addEventListener('error', () => playFade(img), { once: true });
+            img.addEventListener('load', decode, { once: true });
+            img.addEventListener('error', () => resolve(), { once: true });
           }
         });
+        const imgs = Array.from(document.querySelectorAll('img.img-fade'));
+        if (imgs.length) {
+          Promise.all(imgs.map(readyFor)).then(() => {
+            imgs.forEach(playFade);
+          });
+        }
       })();
     </script>
     <style is:global>
