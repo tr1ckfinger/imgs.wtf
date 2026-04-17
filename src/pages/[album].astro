@@ -80,7 +80,7 @@ const { album } = Astro.props;
     margin: 0;
     overflow: hidden;
     border-radius: 3px;
-    background: #f2f2f2;
+    background: var(--card-bg);
     min-width: 0;
   }
   .justified figure img {
@@ -119,11 +119,11 @@ const { album } = Astro.props;
     display: flex;
   }
   .lightbox.open {
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--lightbox-bg);
     backdrop-filter: blur(12px);
   }
   .lightbox.closing {
-    background: rgba(255, 255, 255, 0);
+    background: transparent;
     backdrop-filter: blur(0px);
   }
   .lightbox.open.zoomed {
@@ -153,8 +153,8 @@ const { album } = Astro.props;
     height: 40px;
     border-radius: 999px;
     border: none;
-    background: rgba(0, 0, 0, 0.06);
-    color: #111;
+    background: var(--btn-bg);
+    color: var(--fg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -162,7 +162,7 @@ const { album } = Astro.props;
     z-index: 101;
     transition: background 150ms ease;
   }
-  .lb-close:hover { background: rgba(0, 0, 0, 0.12); }
+  .lb-close:hover { background: var(--btn-bg-hover); }
 
   @media (max-width: 700px) {
     .lightbox { padding: 16px; }
@@ -172,7 +172,6 @@ const { album } = Astro.props;
       right: 20px;
       width: 52px;
       height: 52px;
-      background: rgba(0, 0, 0, 0.08);
     }
   }
 </style>
