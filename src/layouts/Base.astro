@@ -73,10 +73,10 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           // first frame at full opacity regardless of a CSS transition.
           img.animate(
             [
-              { opacity: 0, filter: 'blur(6px)', transform: 'scale(1.02)' },
+              { opacity: 0, filter: 'blur(4px)', transform: 'scale(1.02)' },
               { opacity: 1, filter: 'blur(0px)', transform: 'scale(1)' },
             ],
-            { duration: 1400, easing: 'ease-out', fill: 'both' }
+            { duration: 1000, easing: 'ease-out', fill: 'both' }
           );
         };
         const onReady = (img) => {
