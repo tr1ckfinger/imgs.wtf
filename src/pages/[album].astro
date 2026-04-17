@@ -28,7 +28,7 @@ const { album } = Astro.props;
           style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect}; animation-delay: ${delay}ms;`}
         >
           <img
-            class="thumb"
+            class="thumb img-fade"
             src={cldUrl(img.public_id, { w: 1400 })}
             data-full={cldUrl(img.public_id, { w: 2400 })}
             alt=""

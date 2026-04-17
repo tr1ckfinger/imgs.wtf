@@ -17,6 +17,7 @@ const albums = await getAlbums();
         style={`animation-delay: ${delay}ms`}
       >
         <img
+          class="img-fade"
           src={cldUrl(album.cover.public_id, { w: 1200, h: 1500, crop: 'fill' })}
           alt={album.title}
           loading="lazy"

@@ -63,6 +63,16 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           if (e.key === 'd' || e.key === 'D') setTheme('dark');
           if (e.key === 'l' || e.key === 'L') setTheme('light');
         });
+
+        const markLoaded = (img) => img.classList.add('loaded');
+        document.querySelectorAll('img.img-fade').forEach((img) => {
+          if (img.complete && img.naturalWidth > 0) {
+            markLoaded(img);
+          } else {
+            img.addEventListener('load', () => markLoaded(img), { once: true });
+            img.addEventListener('error', () => markLoaded(img), { once: true });
+          }
+        });
       })();
     </script>
     <style is:global>
@@ -121,8 +131,16 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
         transform-origin: center center;
         will-change: transform, opacity, filter;
       }
+      .img-fade {
+        opacity: 0;
+        transition: opacity 520ms ease-out;
+      }
+      .img-fade.loaded {
+        opacity: 1;
+      }
       @media (prefers-reduced-motion: reduce) {
         .drop-in { animation: none; }
+        .img-fade { transition: none; opacity: 1; }
       }
       a {
         color: inherit;
