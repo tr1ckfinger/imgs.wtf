@@ -64,19 +64,26 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           if (e.key === 'l' || e.key === 'L') setTheme('light');
         });
 
-        const markLoaded = (img) => {
-          // Double rAF guarantees the browser paints the opacity:0 state
-          // at least once before we flip to .loaded, so the transition
-          // actually runs instead of being collapsed into a single frame.
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => img.classList.add('loaded'));
-          });
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const playFade = (img) => {
+          img.classList.add('loaded');
+          if (reduceMotion || typeof img.animate !== 'function') return;
+          // WAAPI animates explicitly from the start keyframe, bypassing
+          // the Safari iOS quirk where a freshly-decoded <img> paints its
+          // first frame at full opacity regardless of a CSS transition.
+          img.animate(
+            [
+              { opacity: 0, filter: 'blur(6px)', transform: 'scale(1.02)' },
+              { opacity: 1, filter: 'blur(0px)', transform: 'scale(1)' },
+            ],
+            { duration: 1400, easing: 'ease-out', fill: 'both' }
+          );
         };
         const onReady = (img) => {
           if (typeof img.decode === 'function') {
-            img.decode().then(() => markLoaded(img)).catch(() => markLoaded(img));
+            img.decode().then(() => playFade(img)).catch(() => playFade(img));
           } else {
-            markLoaded(img);
+            playFade(img);
           }
         };
         document.querySelectorAll('img.img-fade').forEach((img) => {
@@ -84,7 +91,7 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
             onReady(img);
           } else {
             img.addEventListener('load', () => onReady(img), { once: true });
-            img.addEventListener('error', () => markLoaded(img), { once: true });
+            img.addEventListener('error', () => playFade(img), { once: true });
           }
         });
       })();
@@ -147,27 +154,14 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       }
       .img-fade {
         opacity: 0;
-        filter: blur(6px);
-        transform: scale(1.02);
-        transition:
-          opacity 1400ms ease-out,
-          filter 1400ms ease-out,
-          transform 1400ms ease-out;
         will-change: opacity, filter, transform;
       }
       .img-fade.loaded {
         opacity: 1;
-        filter: blur(0);
-        transform: scale(1);
       }
       @media (prefers-reduced-motion: reduce) {
         .drop-in { animation: none; }
-        .img-fade {
-          transition: none;
-          opacity: 1;
-          filter: none;
-          transform: none;
-        }
+        .img-fade { opacity: 1; }
       }
       a {
         color: inherit;
