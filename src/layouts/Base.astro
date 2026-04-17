@@ -64,12 +64,26 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           if (e.key === 'l' || e.key === 'L') setTheme('light');
         });
 
-        const markLoaded = (img) => img.classList.add('loaded');
+        const markLoaded = (img) => {
+          // Double rAF guarantees the browser paints the opacity:0 state
+          // at least once before we flip to .loaded, so the transition
+          // actually runs instead of being collapsed into a single frame.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => img.classList.add('loaded'));
+          });
+        };
+        const onReady = (img) => {
+          if (typeof img.decode === 'function') {
+            img.decode().then(() => markLoaded(img)).catch(() => markLoaded(img));
+          } else {
+            markLoaded(img);
+          }
+        };
         document.querySelectorAll('img.img-fade').forEach((img) => {
           if (img.complete && img.naturalWidth > 0) {
-            markLoaded(img);
+            onReady(img);
           } else {
-            img.addEventListener('load', () => markLoaded(img), { once: true });
+            img.addEventListener('load', () => onReady(img), { once: true });
             img.addEventListener('error', () => markLoaded(img), { once: true });
           }
         });
@@ -133,14 +147,27 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       }
       .img-fade {
         opacity: 0;
-        transition: opacity 520ms ease-out;
+        filter: blur(6px);
+        transform: scale(1.02);
+        transition:
+          opacity 780ms ease-out,
+          filter 780ms ease-out,
+          transform 780ms ease-out;
+        will-change: opacity, filter, transform;
       }
       .img-fade.loaded {
         opacity: 1;
+        filter: blur(0);
+        transform: scale(1);
       }
       @media (prefers-reduced-motion: reduce) {
         .drop-in { animation: none; }
-        .img-fade { transition: none; opacity: 1; }
+        .img-fade {
+          transition: none;
+          opacity: 1;
+          filter: none;
+          transform: none;
+        }
       }
       a {
         color: inherit;
