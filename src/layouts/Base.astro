@@ -315,7 +315,16 @@ const isContact = path === '/contact';
         margin: 0 auto;
       }
       @media (max-width: 640px) {
-        .nav-inner { padding: 16px; gap: 10px; }
+        /* Let the right column size to its content so the links and
+           toggle always sit flush against the right edge; the brand
+           gets whatever space is left and truncates with an ellipsis
+           if the viewport is too narrow. The 1fr ensures there's
+           always a gap between the brand and the first nav link. */
+        .nav-inner {
+          padding: 16px;
+          gap: 12px;
+          grid-template-columns: minmax(0, 1fr) auto auto;
+        }
         main { padding: 0 16px 48px; }
         .nav-left { gap: 12px; }
         .back-arrow {
