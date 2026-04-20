@@ -1,0 +1,73 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="cntct me — imgs.wtf">
+  <section class="page">
+    <h1>cntct me</h1>
+    <div class="body">
+      <p>[Placeholder — a short invitation to get in touch, for commissions, prints, or just to say hi.]</p>
+      <dl class="fields">
+        <dt>email</dt>
+        <dd><a href="mailto:hello@example.com">hello@example.com</a></dd>
+        <dt>instagram</dt>
+        <dd><a href="https://instagram.com/username" target="_blank" rel="noreferrer">@username</a></dd>
+        <dt>based in</dt>
+        <dd>[city, country]</dd>
+      </dl>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .page {
+    max-width: 640px;
+    padding: 48px 0 80px;
+  }
+  .page h1 {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 28px;
+    color: var(--fg);
+  }
+  .body p {
+    color: var(--fg);
+    line-height: 1.65;
+    font-size: 16px;
+    margin: 0 0 28px;
+  }
+  .fields {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    row-gap: 12px;
+    column-gap: 28px;
+    margin: 0;
+  }
+  .fields dt {
+    color: var(--muted);
+    font-size: 14px;
+    align-self: center;
+  }
+  .fields dd {
+    margin: 0;
+    font-size: 15px;
+    color: var(--fg);
+  }
+  .fields a {
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+    transition: opacity 150ms ease;
+  }
+  .fields a:hover {
+    opacity: 0.6;
+  }
+  @media (max-width: 640px) {
+    .page { padding: 24px 0 56px; }
+    .page h1 { font-size: 26px; margin-bottom: 20px; }
+    .body p { font-size: 15px; margin-bottom: 22px; }
+    .fields { column-gap: 20px; row-gap: 10px; }
+    .fields dt { font-size: 13px; }
+    .fields dd { font-size: 14px; }
+  }
+</style>

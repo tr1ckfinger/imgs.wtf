@@ -4,6 +4,11 @@ interface Props {
   albumHeader?: { title: string; backHref: string; count: number };
 }
 const { title = 'imgs.wtf', albumHeader } = Astro.props;
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isHome = path === '/';
+const isAbout = path === '/about';
+const isContact = path === '/contact';
 ---
 
 <!doctype html>
@@ -39,6 +44,11 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           {albumHeader && <span class="count">{albumHeader.count} images</span>}
         </div>
         <div class="nav-right">
+          <nav class="nav-links" aria-label="Primary">
+            <a href="/" data-label="imgs" class:list={['nav-link', { active: isHome }]}>imgs</a>
+            <a href="/about" data-label="abt me" class:list={['nav-link', { active: isAbout }]}>abt me</a>
+            <a href="/contact" data-label="cntct me" class:list={['nav-link', { active: isContact }]}>cntct me</a>
+          </nav>
           <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
         </div>
       </div>
@@ -232,6 +242,37 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       }
       .nav-right {
         justify-self: end;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        font-size: 14px;
+      }
+      .nav-link {
+        color: var(--muted);
+        transition: color 150ms ease;
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+      }
+      .nav-link:hover {
+        color: var(--fg);
+      }
+      /* The active link stays at font-weight 400 so its glyph metrics
+         (and therefore the link's box width) never change — a bumped
+         font-weight would reflow the neighbours even with a reserved-
+         width pseudo-element, because the font stack's 500 variant
+         advances slightly differently. Instead, a two-axis text-shadow
+         of currentColor fakes the added weight visually: the shadow
+         adds paint, not layout. */
+      .nav-link.active {
+        color: var(--fg);
+        text-shadow:
+          0.3px 0 0 currentColor,
+          -0.3px 0 0 currentColor;
       }
       .brand {
         font-weight: 600;
@@ -274,13 +315,19 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
         margin: 0 auto;
       }
       @media (max-width: 640px) {
-        .nav-inner { padding: 16px; }
+        .nav-inner { padding: 16px; gap: 10px; }
         main { padding: 0 16px 48px; }
         .nav-left { gap: 12px; }
         .back-arrow {
           position: static;
           transform: none;
         }
+        .nav-right { gap: 14px; }
+        .nav-links { gap: 12px; font-size: 13px; }
+        /* Album count hides on narrow screens so the nav links and
+           album title both have room to breathe. */
+        .nav-center { display: none; }
+        .brand { font-size: 14px; }
       }
     </style>
   </body>
