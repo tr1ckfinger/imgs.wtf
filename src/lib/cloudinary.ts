@@ -31,11 +31,18 @@ export type Album = {
   images: CldImage[];
 };
 
-function titleFromSlug(slug: string) {
-  return slug
-    .split(/[-_]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+// Album titles are the raw folder name, lowercased, with spaces and
+// dashes/underscores all rendered as a single space. Folder "New York"
+// → "new york"; folder "street-life" → "street life".
+function titleFromFolder(folder: string) {
+  return folder.replace(/[-_]/g, ' ').toLowerCase();
+}
+
+// URL slugs can't contain spaces, so collapse any whitespace run to a
+// single hyphen and lowercase the rest. Folder "New York" → "new-york";
+// folder "street-life" stays "street-life".
+function slugFromFolder(folder: string) {
+  return folder.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
 async function listFolders(): Promise<string[]> {
@@ -44,8 +51,10 @@ async function listFolders(): Promise<string[]> {
 }
 
 async function listImagesInFolder(folder: string): Promise<CldImage[]> {
+  // Quote the folder name so any spaces in it are parsed as part of
+  // the path segment instead of splitting the search expression.
   const res: any = await cloudinary.search
-    .expression(`folder:${folder}/*`)
+    .expression(`folder:"${folder}/*"`)
     .with_field('tags')
     .with_field('context')
     .sort_by('public_id', 'asc')
@@ -75,8 +84,8 @@ async function fetchAlbums(): Promise<Album[]> {
     const cover = images.find((i) => i.tags?.includes('cover')) ?? images[0];
 
     albums.push({
-      slug: folder,
-      title: titleFromSlug(folder),
+      slug: slugFromFolder(folder),
+      title: titleFromFolder(folder),
       cover,
       images,
     });
