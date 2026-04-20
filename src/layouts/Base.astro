@@ -15,13 +15,14 @@ const isContact = path === '/contact';
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- PNG fallback for browsers that don't render the SVG's embedded
-         bitmap reliably (mobile Safari in particular). apple-touch-icon
-         is what iOS uses for bookmarks and the Home Screen; without it
-         iOS falls back to a page screenshot or a generic globe. -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- The "-v2" suffix is a cache-bust: iOS Safari's OS-level favicon
+         database (shared with Spotlight / Siri suggestions) hung onto
+         an Astro-starter icon from an earlier deploy and refused to
+         re-fetch from the same URL even after Website Data was cleared.
+         Renaming the files forces a fresh fetch. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon-v2.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32-v2.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
