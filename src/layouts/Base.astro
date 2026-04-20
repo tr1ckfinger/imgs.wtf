@@ -22,7 +22,7 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       })();
     </script>
   </head>
-  <body data-sync-fade={albumHeader ? 'false' : 'true'}>
+  <body>
     <header class="nav">
       <div class="nav-inner">
         <div class="nav-left">
@@ -68,15 +68,16 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
         const playFade = (img) => {
           img.classList.add('loaded');
           if (reduceMotion || typeof img.animate !== 'function') return;
-          // WAAPI animates explicitly from the start keyframe, bypassing
-          // the Safari iOS quirk where a freshly-decoded <img> paints its
-          // first frame at full opacity regardless of a CSS transition.
+          // The z-travel is on the tile now; per-image fade is pure
+          // opacity. WAAPI is still used (instead of a CSS transition)
+          // because Safari iOS skips transition interpolation on an
+          // <img> that hasn't painted a prior state.
           img.animate(
-            [
-              { opacity: 0, filter: 'blur(1.5px)', transform: 'scale(1.01)' },
-              { opacity: 1, filter: 'blur(0px)', transform: 'scale(1)' },
-            ],
-            { duration: 1000, easing: 'ease-out', fill: 'both' }
+            [{ opacity: 0 }, { opacity: 1 }],
+            // 'backwards' keeps the start keyframe applied before play,
+            // and releases the animated value after play so :hover
+            // filter transitions on the image aren't pinned by WAAPI.
+            { duration: 1000, easing: 'ease-out', fill: 'backwards' }
           );
         };
         const whenDecoded = (img, cb) => {
@@ -107,25 +108,24 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
           const maxD = Math.max(...dists) || 1;
           tiles.forEach((tile, i) => {
             const n = dists[i] / maxD; // 0 = center, 1 = furthest corner
-            const scale = 1.03 + n * 0.17; // 1.03 → 1.20
-            const delay = n * 240;         // ms, center first, corners last
+            // Scale lives on the tile again, so the range is bounded to
+            // what fits in the layout gap — adjacent corner tiles can
+            // both push outward at most ~5% each before they'd overlap
+            // on the tightest (mobile) breakpoint.
+            const scale = 1.03 + n * 0.07; // 1.03 → 1.10
+            const delay = n * 240;
             tile.style.setProperty('--drop-scale', scale.toFixed(3));
             tile.style.animationDelay = delay.toFixed(0) + 'ms';
           });
         }
         requestAnimationFrame(() => document.body.classList.add('drop-ready'));
 
+        // Fade each image in the moment it's ready. Syncing across the
+        // whole grid doesn't work once loading="lazy" enters the picture —
+        // off-screen images never fire a load event until you scroll, so
+        // a Promise.all() gate would hang forever.
         const imgs = Array.from(document.querySelectorAll('img.img-fade'));
-        const sync = document.body.dataset.syncFade === 'true';
-        if (sync && imgs.length) {
-          // Index page: wait for every image, then fade them all together.
-          Promise.all(imgs.map(readyFor)).then(() => {
-            imgs.forEach(playFade);
-          });
-        } else {
-          // Album page: fade each image in as soon as it's ready.
-          imgs.forEach((img) => readyFor(img).then(() => playFade(img)));
-        }
+        imgs.forEach((img) => readyFor(img).then(() => playFade(img)));
       })();
     </script>
     <style is:global>
@@ -167,7 +167,7 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
       @keyframes drop-in {
         0% {
           opacity: 0;
-          transform: scale(var(--drop-scale, 1.14));
+          transform: scale(var(--drop-scale, 1.08));
           filter: blur(3px);
         }
         70% {
