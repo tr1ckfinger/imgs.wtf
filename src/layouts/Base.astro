@@ -73,11 +73,29 @@ const isContact = path === '/contact';
       (() => {
         const themeColorMeta = document.querySelector('meta[name="theme-color"]');
         const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
-        const setTheme = (t) => {
+        // Theme commit. The actual DOM flip is atomic — every
+        // var(--bg)/var(--nav-bg)/etc. paints the new value in a
+        // single frame, with no CSS transition in between.
+        const commitTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
           if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#0c0c0f' : '#ffffff';
           if (colorSchemeMeta) colorSchemeMeta.content = t;
+        };
+        // View Transitions: the browser snapshots the old state, runs
+        // commitTheme, snapshots the new state, then compositor
+        // cross-fades the two pre-rendered images. Because the page
+        // background itself never "animates" (it's two fixed tints
+        // alpha-blending), Safari iOS samples the committed tint once
+        // and drives its chrome retint as a plain crossfade between
+        // two colors — no smoothing convolution, no adaptive lag, so
+        // the chrome and the page stay frame-locked.
+        const setTheme = (t) => {
+          if (typeof document.startViewTransition === 'function') {
+            document.startViewTransition(() => commitTheme(t));
+          } else {
+            commitTheme(t);
+          }
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
@@ -196,13 +214,29 @@ const isContact = path === '/contact';
         color: var(--fg);
         font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
-        /* 17ms delay still matches Safari's chrome (the chrome starts
-           its crossfade one frame after a theme flip), but the page
-           runs longer now — 500ms — because the chrome-speed read too
-           quick. The curve is the most extreme S a cubic-bezier with
-           single control points can make: (1, 0, 0, 1) parks on each
-           tint at the tails and rips through the middle. */
-        transition: background-color 500ms cubic-bezier(1, 0, 0, 1) 17ms, color 500ms cubic-bezier(1, 0, 0, 1) 17ms;
+        /* No CSS transition on the body. The theme flip is committed
+           atomically inside a View Transition, so the crossfade
+           happens at the compositor between two snapshots instead of
+           animating background-color. This keeps Safari iOS's chrome
+           retint frame-locked with the page (a CSS transition makes
+           Safari's sampling convolution smear the chrome). */
+      }
+      /* The theme-toggle view transition. The default UA crossfade is
+         ~250ms ease — a bit quick for a deliberate dark/light swap —
+         so we override duration + easing here. Both sides of the
+         transition (old state fading out, new state fading in) run on
+         the same timeline at the compositor, which is what keeps
+         Safari's chrome retint perfectly synced with the page. */
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation-duration: 450ms;
+        animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation: none;
+        }
       }
       @keyframes drop-in {
         0% {
@@ -248,9 +282,9 @@ const isContact = path === '/contact';
         top: 0;
         z-index: 10;
         background: var(--nav-bg);
-        /* Nav fades in the same cadence as the body so the whole
-           surface cross-fades uniformly with Safari's chrome. */
-        transition: background-color 500ms cubic-bezier(1, 0, 0, 1) 17ms;
+        /* No CSS transition — theme flips happen inside a View
+           Transition, so the whole page cross-fades at the compositor
+           instead of animating the nav's background-color. */
         /* backdrop-filter is intentionally off. A transparent/blurred
            sticky header appears to prevent iOS Safari from re-sampling
            its chrome tint on theme toggle (confirmed by other devs
