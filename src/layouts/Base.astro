@@ -71,15 +71,24 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
-        const themeColorMeta = document.getElementById('theme-color-meta');
+        const updateThemeColor = (t) => {
+          // Safari iOS reads <meta name="theme-color"> on initial load
+          // and on tab-switch events, but mutating the content attribute
+          // in place doesn't always trigger a re-read. Replacing the
+          // whole element (remove + re-insert) reliably forces Safari
+          // to pick up the new value immediately on toggle.
+          const old = document.querySelector('meta[name="theme-color"]');
+          if (old) old.remove();
+          const fresh = document.createElement('meta');
+          fresh.setAttribute('name', 'theme-color');
+          fresh.id = 'theme-color-meta';
+          fresh.setAttribute('content', t === 'dark' ? '#0c0c0f' : '#ffffff');
+          document.head.appendChild(fresh);
+        };
         const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
-          // Keep Safari's top bar / Android's task-switcher tint in sync
-          // with the page background when the user toggles themes.
-          if (themeColorMeta) {
-            themeColorMeta.setAttribute('content', t === 'dark' ? '#0c0c0f' : '#ffffff');
-          }
+          updateThemeColor(t);
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
