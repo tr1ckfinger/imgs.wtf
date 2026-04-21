@@ -169,6 +169,12 @@ const isContact = path === '/contact';
     <style is:global>
       :root,
       :root[data-theme='light'] {
+        /* color-scheme tells Safari which system palette the page is
+           using — it's the other half of the "tint the chrome" story
+           alongside <meta name=\"theme-color\">. Without it set,
+           Safari ignores dynamic theme-color changes and keeps
+           tinting from its own heuristic. */
+        color-scheme: light;
         --bg: #ffffff;
         --fg: #111111;
         --muted: #666666;
@@ -180,6 +186,7 @@ const isContact = path === '/contact';
         --img-hover: 0.85;
       }
       :root[data-theme='dark'] {
+        color-scheme: dark;
         --bg: #0c0c0f;
         --fg: #eaeaea;
         --muted: #8a8a90;
