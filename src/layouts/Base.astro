@@ -196,15 +196,13 @@ const isContact = path === '/contact';
         color: var(--fg);
         font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
-        /* Frame-matched to Safari's chrome retint: the chrome starts
-           its crossfade one frame (~17ms) after a theme flip and runs
-           ~316ms end-to-end, so the page waits a frame and uses the
-           same duration to stay locked to the top bar. The curve is
-           the most extreme S a cubic-bezier with single control
-           points can make — (1, 0, 0, 1) parks on each tint almost
-           stationary at the tails and rips through the middle, which
-           is what the chrome visually does. */
-        transition: background-color 316ms cubic-bezier(1, 0, 0, 1) 17ms, color 316ms cubic-bezier(1, 0, 0, 1) 17ms;
+        /* 17ms delay still matches Safari's chrome (the chrome starts
+           its crossfade one frame after a theme flip), but the page
+           runs longer now — 500ms — because the chrome-speed read too
+           quick. The curve is the most extreme S a cubic-bezier with
+           single control points can make: (1, 0, 0, 1) parks on each
+           tint at the tails and rips through the middle. */
+        transition: background-color 500ms cubic-bezier(1, 0, 0, 1) 17ms, color 500ms cubic-bezier(1, 0, 0, 1) 17ms;
       }
       @keyframes drop-in {
         0% {
@@ -252,7 +250,7 @@ const isContact = path === '/contact';
         background: var(--nav-bg);
         /* Nav fades in the same cadence as the body so the whole
            surface cross-fades uniformly with Safari's chrome. */
-        transition: background-color 316ms cubic-bezier(1, 0, 0, 1) 17ms;
+        transition: background-color 500ms cubic-bezier(1, 0, 0, 1) 17ms;
         /* backdrop-filter is intentionally off. A transparent/blurred
            sticky header appears to prevent iOS Safari from re-sampling
            its chrome tint on theme toggle (confirmed by other devs
