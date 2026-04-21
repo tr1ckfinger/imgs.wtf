@@ -200,10 +200,10 @@ const isContact = path === '/contact';
            its crossfade one frame (~17ms) after a theme flip and runs
            ~316ms end-to-end, so the page waits a frame and uses the
            same duration to stay locked to the top bar. The curve is a
-           heavier S than ease-in-out — Safari's chrome lingers near
-           the start/end tints and snaps through the middle, so a
-           quint-ish bezier (0.83, 0, 0.17, 1) hugs that shape. */
-        transition: background-color 316ms cubic-bezier(0.83, 0, 0.17, 1) 17ms, color 316ms cubic-bezier(0.83, 0, 0.17, 1) 17ms;
+           heavy S (expo-ish) — Safari's chrome holds near the start
+           and end tints and snaps through the middle, so bezier
+           (0.9, 0, 0.1, 1) hugs that shape. */
+        transition: background-color 316ms cubic-bezier(0.9, 0, 0.1, 1) 17ms, color 316ms cubic-bezier(0.9, 0, 0.1, 1) 17ms;
       }
       @keyframes drop-in {
         0% {
@@ -251,7 +251,7 @@ const isContact = path === '/contact';
         background: var(--nav-bg);
         /* Nav fades in the same cadence as the body so the whole
            surface cross-fades uniformly with Safari's chrome. */
-        transition: background-color 316ms cubic-bezier(0.83, 0, 0.17, 1) 17ms;
+        transition: background-color 316ms cubic-bezier(0.9, 0, 0.1, 1) 17ms;
         /* backdrop-filter is intentionally off. A transparent/blurred
            sticky header appears to prevent iOS Safari from re-sampling
            its chrome tint on theme toggle (confirmed by other devs
