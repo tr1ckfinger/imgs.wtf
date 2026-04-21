@@ -25,12 +25,18 @@ const isContact = path === '/contact';
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
+    <!-- Populated by the inline script below (and updated on toggle) so
+         the Safari top bar / Android task-switcher chrome tint matches
+         the active theme. Values mirror the --bg custom properties. -->
+    <meta name="theme-color" id="theme-color-meta" content="#ffffff" />
     <title>{title}</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
         const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
+        const meta = document.getElementById('theme-color-meta');
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c0c0f' : '#ffffff');
       })();
     </script>
   </head>
@@ -65,9 +71,15 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
+        const themeColorMeta = document.getElementById('theme-color-meta');
         const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
+          // Keep Safari's top bar / Android's task-switcher tint in sync
+          // with the page background when the user toggles themes.
+          if (themeColorMeta) {
+            themeColorMeta.setAttribute('content', t === 'dark' ? '#0c0c0f' : '#ffffff');
+          }
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
