@@ -242,14 +242,13 @@ const isContact = path === '/contact';
         position: sticky;
         top: 0;
         z-index: 10;
-        background: var(--nav-bg);
-        /* Nav fades in the same cadence as the body. */
-        transition: background-color 300ms ease-in-out;
-        /* backdrop-filter is intentionally off. A transparent/blurred
-           sticky header appears to prevent iOS Safari from re-sampling
-           its chrome tint on theme toggle (confirmed by other devs
-           hitting the same bug); an opaque nav lets the chrome flip
-           in lock-step with the body background on toggle. */
+        /* No background. Letting the body colour show through the
+           nav means Safari iOS has a single uniform surface to sample
+           under its chrome, which is the only reliable way to get
+           the chrome tint to retint frame-perfectly with the body
+           background transition (previously a second transitioning
+           surface above the body was creating a sampling mismatch).
+           The trade-off: scrolled content shows behind the nav. */
       }
       .nav-inner {
         max-width: 1400px;
