@@ -113,7 +113,10 @@
   .lb-album:hover { background: var(--btn-bg-hover); }
 
   @media (max-width: 700px) {
-    .lightbox { padding: 16px; }
+    /* Extra bottom padding reserves room for the fixed controls so a
+       tall portrait image never extends into the button zone. 96px =
+       52 (button height) + 24 (baseline offset) + 20 (visual gap). */
+    .lightbox { padding: 16px 16px 96px; }
     .lb-close {
       top: auto;
       bottom: max(24px, env(safe-area-inset-bottom, 0));
