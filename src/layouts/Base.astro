@@ -23,7 +23,14 @@ const isContact = path === '/contact';
     <link rel="icon" type="image/svg+xml" href="/favicon-v2.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32-v2.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover extends the page background under the iOS
+         status bar so Safari tints its chrome from the content color
+         directly. That's repainted immediately when the body bg changes,
+         which makes the chrome flip in lock-step with the theme toggle
+         — more reliable than Safari's flaky re-observation of a
+         mutated <meta name="theme-color">. The theme-color meta below
+         still ships as a fallback for Android Chrome / initial paint. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
     <!-- Populated by the inline script below (and updated on toggle) so
          the Safari top bar / Android task-switcher chrome tint matches
@@ -258,7 +265,11 @@ const isContact = path === '/contact';
       .nav-inner {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 20px 24px;
+        /* safe-area-inset-top pushes the nav content below the iOS
+           notch/status bar now that viewport-fit=cover extends the
+           page background all the way to the device edge. Horizontal
+           insets cover landscape notches. */
+        padding: calc(20px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) 20px calc(24px + env(safe-area-inset-left));
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
@@ -356,7 +367,9 @@ const isContact = path === '/contact';
            if the viewport is too narrow. The 1fr ensures there's
            always a gap between the brand and the first nav link. */
         .nav-inner {
-          padding: 16px;
+          /* Same safe-area treatment as desktop but with the tighter
+             mobile base paddings (16px all around). */
+          padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 16px calc(16px + env(safe-area-inset-left));
           gap: 12px;
           grid-template-columns: minmax(0, 1fr) auto auto;
         }
