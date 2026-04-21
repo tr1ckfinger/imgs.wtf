@@ -25,14 +25,7 @@ const isContact = path === '/contact';
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
-    <!-- Deliberately no <meta name="theme-color">. When theme-color is
-         set, Safari pins its chrome to that color and ignores the
-         body background; when it's absent, Safari tints the chrome
-         from the content itself, which repaints in the same frame as
-         the body on toggle. This is how frankmorlok.com's chrome stays
-         in sync without any theme-color manipulation. The color-scheme
-         meta stays so Safari knows which palette (light/dark) its
-         native UI controls should use. -->
+    <meta name="theme-color" content="#ffffff" />
     <meta name="color-scheme" content="light" />
     <title>{title}</title>
     <script is:inline>
@@ -40,7 +33,9 @@ const isContact = path === '/contact';
         const saved = localStorage.getItem('theme');
         const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
+        const themeColor = document.querySelector('meta[name="theme-color"]');
         const colorScheme = document.querySelector('meta[name="color-scheme"]');
+        if (themeColor) themeColor.content = theme === 'dark' ? '#0c0c0f' : '#ffffff';
         if (colorScheme) colorScheme.content = theme;
       })();
     </script>
@@ -76,39 +71,24 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
+        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
         const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
-        const applyTheme = (t) => {
+        const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
-          if (colorSchemeMeta) colorSchemeMeta.content = t;
-        };
-        // iOS Safari caches its chrome tint on the first paint of a
-        // document and will not re-sample it on DOM mutation — not via
-        // <meta name="theme-color"> swaps, not via color-scheme changes,
-        // not via body background updates under viewport-fit=cover.
-        // The only reliable way to get the top bar to flip on toggle
-        // is a fresh paint, so we persist the new theme to localStorage
-        // and reload. The inline head script then applies it before
-        // first paint, the drop-in replays, and Safari tints its chrome
-        // from the correct body background. Desktop browsers take the
-        // same path for consistency.
-        const setThemeAndReload = (t) => {
           localStorage.setItem('theme', t);
-          // Apply immediately so the page starts transitioning visually
-          // while the reload is in flight — avoids a flash of the old
-          // theme during the network round-trip.
-          applyTheme(t);
-          location.reload();
+          if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#0c0c0f' : '#ffffff';
+          if (colorSchemeMeta) colorSchemeMeta.content = t;
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
-          setThemeAndReload(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
         });
         document.addEventListener('keydown', (e) => {
           if (e.metaKey || e.ctrlKey || e.altKey) return;
           const tag = (e.target && e.target.tagName) || '';
           if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-          if (e.key === 'd' || e.key === 'D') setThemeAndReload('dark');
-          if (e.key === 'l' || e.key === 'L') setThemeAndReload('light');
+          if (e.key === 'd' || e.key === 'D') setTheme('dark');
+          if (e.key === 'l' || e.key === 'L') setTheme('light');
         });
 
         const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
