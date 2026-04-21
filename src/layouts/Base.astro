@@ -198,7 +198,7 @@ const isContact = path === '/contact';
         -webkit-font-smoothing: antialiased;
         /* Matches the speed Safari uses to retint its own chrome on
            toggle so the page and the top bar cross-fade together. */
-        transition: background-color 420ms ease-in-out, color 420ms ease-in-out;
+        transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
       }
       @keyframes drop-in {
         0% {
@@ -246,7 +246,7 @@ const isContact = path === '/contact';
         background: var(--nav-bg);
         /* Nav fades in the same cadence as the body so the whole
            surface cross-fades uniformly with Safari's chrome. */
-        transition: background-color 420ms ease-in-out;
+        transition: background-color 300ms ease-in-out;
         /* backdrop-filter is intentionally off. A transparent/blurred
            sticky header appears to prevent iOS Safari from re-sampling
            its chrome tint on theme toggle (confirmed by other devs
