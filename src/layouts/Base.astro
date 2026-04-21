@@ -77,26 +77,38 @@ const isContact = path === '/contact';
     <script is:inline>
       (() => {
         const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
-        const setTheme = (t) => {
+        const applyTheme = (t) => {
           document.documentElement.dataset.theme = t;
-          localStorage.setItem('theme', t);
-          // Update color-scheme so Safari renders its native UI bits
-          // in the matching palette. The chrome tint itself comes from
-          // the body background via viewport-fit=cover — no theme-color
-          // meta is set on purpose, since that would override the
-          // content-sampling behaviour we rely on here.
           if (colorSchemeMeta) colorSchemeMeta.content = t;
+        };
+        // iOS Safari caches its chrome tint on the first paint of a
+        // document and will not re-sample it on DOM mutation — not via
+        // <meta name="theme-color"> swaps, not via color-scheme changes,
+        // not via body background updates under viewport-fit=cover.
+        // The only reliable way to get the top bar to flip on toggle
+        // is a fresh paint, so we persist the new theme to localStorage
+        // and reload. The inline head script then applies it before
+        // first paint, the drop-in replays, and Safari tints its chrome
+        // from the correct body background. Desktop browsers take the
+        // same path for consistency.
+        const setThemeAndReload = (t) => {
+          localStorage.setItem('theme', t);
+          // Apply immediately so the page starts transitioning visually
+          // while the reload is in flight — avoids a flash of the old
+          // theme during the network round-trip.
+          applyTheme(t);
+          location.reload();
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
-          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+          setThemeAndReload(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
         });
         document.addEventListener('keydown', (e) => {
           if (e.metaKey || e.ctrlKey || e.altKey) return;
           const tag = (e.target && e.target.tagName) || '';
           if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-          if (e.key === 'd' || e.key === 'D') setTheme('dark');
-          if (e.key === 'l' || e.key === 'L') setTheme('light');
+          if (e.key === 'd' || e.key === 'D') setThemeAndReload('dark');
+          if (e.key === 'l' || e.key === 'L') setThemeAndReload('light');
         });
 
         const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
