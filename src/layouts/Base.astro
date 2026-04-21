@@ -23,27 +23,25 @@ const isContact = path === '/contact';
     <link rel="icon" type="image/svg+xml" href="/favicon-v2.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32-v2.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
-    <!-- viewport-fit=cover extends the page background under the iOS
-         status bar so Safari tints its chrome from the content color
-         directly. That's repainted immediately when the body bg changes,
-         which makes the chrome flip in lock-step with the theme toggle
-         — more reliable than Safari's flaky re-observation of a
-         mutated <meta name="theme-color">. The theme-color meta below
-         still ships as a fallback for Android Chrome / initial paint. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
-    <!-- Populated by the inline script below (and updated on toggle) so
-         the Safari top bar / Android task-switcher chrome tint matches
-         the active theme. Values mirror the --bg custom properties. -->
-    <meta name="theme-color" id="theme-color-meta" content="#ffffff" />
+    <!-- Two metas drive Safari's chrome tinting:
+         - theme-color paints the top-bar background
+         - color-scheme tells Safari's UI which palette the page is in
+         Both are updated below (initial paint) and again from the body
+         script on toggle so the chrome flips together with the page. -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light" />
     <title>{title}</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
         const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
-        const meta = document.getElementById('theme-color-meta');
-        if (meta) meta.setAttribute('content', theme === 'dark' ? '#0c0c0f' : '#ffffff');
+        const themeColor = document.querySelector('meta[name="theme-color"]');
+        const colorScheme = document.querySelector('meta[name="color-scheme"]');
+        if (themeColor) themeColor.content = theme === 'dark' ? '#0c0c0f' : '#ffffff';
+        if (colorScheme) colorScheme.content = theme;
       })();
     </script>
   </head>
@@ -78,24 +76,18 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
-        const updateThemeColor = (t) => {
-          // Safari iOS reads <meta name="theme-color"> on initial load
-          // and on tab-switch events, but mutating the content attribute
-          // in place doesn't always trigger a re-read. Replacing the
-          // whole element (remove + re-insert) reliably forces Safari
-          // to pick up the new value immediately on toggle.
-          const old = document.querySelector('meta[name="theme-color"]');
-          if (old) old.remove();
-          const fresh = document.createElement('meta');
-          fresh.setAttribute('name', 'theme-color');
-          fresh.id = 'theme-color-meta';
-          fresh.setAttribute('content', t === 'dark' ? '#0c0c0f' : '#ffffff');
-          document.head.appendChild(fresh);
-        };
+        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
         const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
-          updateThemeColor(t);
+          // Mutate .content directly — this is the pattern Safari
+          // responds to most reliably for chrome re-tinting. Updating
+          // both the theme-color (top-bar background) and the
+          // color-scheme (UI palette) gives Safari enough signal to
+          // repaint the chrome together with the page.
+          if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#0c0c0f' : '#ffffff';
+          if (colorSchemeMeta) colorSchemeMeta.content = t;
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
