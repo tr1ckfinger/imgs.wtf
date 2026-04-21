@@ -25,18 +25,19 @@ const isContact = path === '/contact';
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="color-scheme" content="light" />
+    <!-- No <meta name="theme-color"> or <meta name="color-scheme">.
+         Safari iOS samples the page content directly to tint its
+         chrome; an explicit theme-color (especially one mutated on
+         toggle) appears to conflict with the content sample and
+         smear the chrome retint. frankmorlok.com omits both metas
+         and the chrome follows its background-color transition
+         frame-perfectly. -->
     <title>{title}</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
         const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
-        const themeColor = document.querySelector('meta[name="theme-color"]');
-        const colorScheme = document.querySelector('meta[name="color-scheme"]');
-        if (themeColor) themeColor.content = theme === 'dark' ? '#0c0c0f' : '#ffffff';
-        if (colorScheme) colorScheme.content = theme;
       })();
     </script>
   </head>
@@ -71,31 +72,9 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
-        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-        const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
-        // Theme commit. The actual DOM flip is atomic — every
-        // var(--bg)/var(--nav-bg)/etc. paints the new value in a
-        // single frame, with no CSS transition in between.
-        const commitTheme = (t) => {
+        const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
-          if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#0c0c0f' : '#ffffff';
-          if (colorSchemeMeta) colorSchemeMeta.content = t;
-        };
-        // View Transitions: the browser snapshots the old state, runs
-        // commitTheme, snapshots the new state, then compositor
-        // cross-fades the two pre-rendered images. Because the page
-        // background itself never "animates" (it's two fixed tints
-        // alpha-blending), Safari iOS samples the committed tint once
-        // and drives its chrome retint as a plain crossfade between
-        // two colors — no smoothing convolution, no adaptive lag, so
-        // the chrome and the page stay frame-locked.
-        const setTheme = (t) => {
-          if (typeof document.startViewTransition === 'function') {
-            document.startViewTransition(() => commitTheme(t));
-          } else {
-            commitTheme(t);
-          }
         };
         const btn = document.getElementById('theme-toggle');
         btn?.addEventListener('click', () => {
@@ -214,29 +193,11 @@ const isContact = path === '/contact';
         color: var(--fg);
         font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
-        /* No CSS transition on the body. The theme flip is committed
-           atomically inside a View Transition, so the crossfade
-           happens at the compositor between two snapshots instead of
-           animating background-color. This keeps Safari iOS's chrome
-           retint frame-locked with the page (a CSS transition makes
-           Safari's sampling convolution smear the chrome). */
-      }
-      /* The theme-toggle view transition. The default UA crossfade is
-         ~250ms ease — a bit quick for a deliberate dark/light swap —
-         so we override duration + easing here. Both sides of the
-         transition (old state fading out, new state fading in) run on
-         the same timeline at the compositor, which is what keeps
-         Safari's chrome retint perfectly synced with the page. */
-      ::view-transition-old(root),
-      ::view-transition-new(root) {
-        animation-duration: 450ms;
-        animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      @media (prefers-reduced-motion: reduce) {
-        ::view-transition-old(root),
-        ::view-transition-new(root) {
-          animation: none;
-        }
+        /* Matches frankmorlok.com's CSS: a simple 300ms ease-in-out
+           crossfade. Safari iOS's chrome lags slightly because it
+           convolves the sample with its own smoothing, but this is
+           the best pure-CSS match we've found. */
+        transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
       }
       @keyframes drop-in {
         0% {
@@ -282,9 +243,8 @@ const isContact = path === '/contact';
         top: 0;
         z-index: 10;
         background: var(--nav-bg);
-        /* No CSS transition — theme flips happen inside a View
-           Transition, so the whole page cross-fades at the compositor
-           instead of animating the nav's background-color. */
+        /* Nav fades in the same cadence as the body. */
+        transition: background-color 300ms ease-in-out;
         /* backdrop-filter is intentionally off. A transparent/blurred
            sticky header appears to prevent iOS Safari from re-sampling
            its chrome tint on theme toggle (confirmed by other devs
