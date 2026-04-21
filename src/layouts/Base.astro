@@ -242,13 +242,13 @@ const isContact = path === '/contact';
         position: sticky;
         top: 0;
         z-index: 10;
-        /* Opaque background with NO transition on theme toggle: the
-           nav snaps from old --bg to new --bg in one frame while the
-           body crossfades over 300ms behind it. The hope is that
-           Safari samples the nav (top surface), sees an instant flip,
-           and runs its own native chrome retint without convolving
-           against the body's animating colour. */
-        background: var(--bg);
+        /* No background. Letting the body colour show through the
+           nav means Safari iOS has a single uniform surface to sample
+           under its chrome, which is the only reliable way to get
+           the chrome tint to retint frame-perfectly with the body
+           background transition (previously a second transitioning
+           surface above the body was creating a sampling mismatch).
+           The trade-off: scrolled content shows behind the nav. */
       }
       .nav-inner {
         max-width: 1400px;
