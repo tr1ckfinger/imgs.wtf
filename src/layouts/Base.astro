@@ -25,12 +25,14 @@ const isContact = path === '/contact';
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
-    <!-- Two metas drive Safari's chrome tinting:
-         - theme-color paints the top-bar background
-         - color-scheme tells Safari's UI which palette the page is in
-         Both are updated below (initial paint) and again from the body
-         script on toggle so the chrome flips together with the page. -->
-    <meta name="theme-color" content="#ffffff" />
+    <!-- Deliberately no <meta name="theme-color">. When theme-color is
+         set, Safari pins its chrome to that color and ignores the
+         body background; when it's absent, Safari tints the chrome
+         from the content itself, which repaints in the same frame as
+         the body on toggle. This is how frankmorlok.com's chrome stays
+         in sync without any theme-color manipulation. The color-scheme
+         meta stays so Safari knows which palette (light/dark) its
+         native UI controls should use. -->
     <meta name="color-scheme" content="light" />
     <title>{title}</title>
     <script is:inline>
@@ -38,9 +40,7 @@ const isContact = path === '/contact';
         const saved = localStorage.getItem('theme');
         const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
-        const themeColor = document.querySelector('meta[name="theme-color"]');
         const colorScheme = document.querySelector('meta[name="color-scheme"]');
-        if (themeColor) themeColor.content = theme === 'dark' ? '#0c0c0f' : '#ffffff';
         if (colorScheme) colorScheme.content = theme;
       })();
     </script>
@@ -76,17 +76,15 @@ const isContact = path === '/contact';
     </main>
     <script is:inline>
       (() => {
-        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
         const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
         const setTheme = (t) => {
           document.documentElement.dataset.theme = t;
           localStorage.setItem('theme', t);
-          // Mutate .content directly — this is the pattern Safari
-          // responds to most reliably for chrome re-tinting. Updating
-          // both the theme-color (top-bar background) and the
-          // color-scheme (UI palette) gives Safari enough signal to
-          // repaint the chrome together with the page.
-          if (themeColorMeta) themeColorMeta.content = t === 'dark' ? '#0c0c0f' : '#ffffff';
+          // Update color-scheme so Safari renders its native UI bits
+          // in the matching palette. The chrome tint itself comes from
+          // the body background via viewport-fit=cover — no theme-color
+          // meta is set on purpose, since that would override the
+          // content-sampling behaviour we rely on here.
           if (colorSchemeMeta) colorSchemeMeta.content = t;
         };
         const btn = document.getElementById('theme-toggle');
