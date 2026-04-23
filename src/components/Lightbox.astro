@@ -197,10 +197,11 @@
     display: flex;
     opacity: 1;
   }
-  .lb-dots .dot {
-    /* Explicit display + min-width/height belt-and-braces: inline
-       <span>s as flex items have historically shipped at 0×0 on
-       iOS Safari unless one of these is spelled out. */
+  /* Dots are created by JS (document.createElement('span')), so they
+     don't carry Astro's scope attribute. Without :global() the
+     scoped selectors don't match and the spans render at 0×0 with
+     no background — i.e. invisible. */
+  .lb-dots :global(.dot) {
     display: block;
     flex: 0 0 auto;
     width: 6px;
@@ -214,20 +215,20 @@
       min-height 180ms ease, opacity 180ms ease, background-color 180ms ease;
   }
   /* Graduated shrink toward the truncated edge, Instagram-style. */
-  .lb-dots .dot.small {
+  .lb-dots :global(.dot.small) {
     width: 5px;
     height: 5px;
     min-width: 5px;
     min-height: 5px;
   }
-  .lb-dots .dot.tiny {
+  .lb-dots :global(.dot.tiny) {
     width: 4px;
     height: 4px;
     min-width: 4px;
     min-height: 4px;
     opacity: 0.2;
   }
-  .lb-dots .dot.active {
+  .lb-dots :global(.dot.active) {
     opacity: 1;
     background: #4a6cf7;
   }
