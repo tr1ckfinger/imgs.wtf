@@ -296,6 +296,23 @@
     }
   }
 
+  // Fire-and-forget pre-decode of a thumb's display source. Keeping
+  // the neighbours warm means the next swipe's slide animation has
+  // a fully decoded <img> to swap in — no black flash mid-slide.
+  function warmThumb(thumb: HTMLImageElement | undefined) {
+    if (!thumb) return;
+    const src = thumb.currentSrc || thumb.src;
+    if (!src) return;
+    const pre = new Image();
+    pre.src = src;
+    if (typeof pre.decode === 'function') pre.decode().catch(() => {});
+  }
+
+  function warmAdjacent() {
+    warmThumb(thumbs[currentIndex - 1]);
+    warmThumb(thumbs[currentIndex + 1]);
+  }
+
   function updateNavState() {
     // Arrows stay visible but are disabled at the ends (no wrap).
     const hasMultiple = thumbs.length > 1;
@@ -361,22 +378,46 @@
     requestAnimationFrame(() => runFlip(from, 'open'));
 
     preloadFullFor(thumb);
+    warmAdjacent();
 
     isOpen = true;
   }
 
-  function goTo(newIndex: number, direction: 'next' | 'prev') {
+  async function goTo(newIndex: number, direction: 'next' | 'prev') {
     if (!isOpen || animating) return;
     if (newIndex < 0 || newIndex >= thumbs.length) return;
     if (newIndex === currentIndex) return;
     if (zoomed) resetZoom();
 
+    // Claim the animating flag up front so repeated taps / key
+    // presses during decode are dropped rather than racing.
+    animating = true;
+
     const newThumb = thumbs[newIndex];
+    const newSrc = newThumb.currentSrc || newThumb.src;
+
+    // Pre-decode the incoming image before doing anything visible.
+    // Without this step, swapping lbImg.src and animating straight
+    // away shows an empty <img> element that sliiides in — then
+    // pops once the browser finishes decoding the pixels. If the
+    // image is already warmed by warmAdjacent() this resolves
+    // effectively instantly.
+    try {
+      const pre = new Image();
+      pre.src = newSrc;
+      if (typeof pre.decode === 'function') await pre.decode();
+    } catch {}
+
+    // Bail if the lightbox was closed while we were decoding.
+    if (!isOpen) {
+      animating = false;
+      return;
+    }
 
     // Clone the current image and pin it absolutely at its on-screen
     // rect. We'll animate the clone OUT to one side while the live
-    // <img> (with its src already swapped to the new image) animates
-    // IN from the opposite side.
+    // <img> (with its src swapped to the now-decoded new image)
+    // animates IN from the opposite side.
     const rect = lbImg.getBoundingClientRect();
     const outgoing = document.createElement('img');
     outgoing.src = lbImg.currentSrc || lbImg.src;
@@ -392,11 +433,9 @@
     outgoing.style.userSelect = 'none';
     document.body.appendChild(outgoing);
 
-    animating = true;
-
-    // Swap to the (usually cached) thumb source instantly; the higher
-    // resolution dataset.full is preloaded in the background below.
-    lbImg.src = newThumb.currentSrc || newThumb.src;
+    // Swap in the newly-decoded image — paints on the very next
+    // frame because the decode is already done.
+    lbImg.src = newSrc;
 
     const vw = window.innerWidth;
     const outDx = direction === 'next' ? -vw : vw;
@@ -435,6 +474,7 @@
 
     updateNavState();
     preloadFullFor(newThumb);
+    warmAdjacent();
   }
 
   function next() {
