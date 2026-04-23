@@ -43,15 +43,18 @@
   .lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(255, 255, 255, 0);
+    background: transparent;
     display: none;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     z-index: 100;
     padding: 40px;
-    backdrop-filter: blur(0px);
-    transition: background 360ms ease, backdrop-filter 360ms ease;
+    /* No backdrop-filter — bg is now solid var(--bg), so there's
+       nothing behind to blur. Keeps the lightbox visually identical
+       to the page background it sits over, which is what mobile
+       Safari needed to stop rendering a subtle colour shift. */
+    transition: background 360ms ease;
   }
   .lightbox.open,
   .lightbox.closing {
@@ -59,11 +62,9 @@
   }
   .lightbox.open {
     background: var(--lightbox-bg);
-    backdrop-filter: blur(12px);
   }
   .lightbox.closing {
     background: transparent;
-    backdrop-filter: blur(0px);
   }
   .lightbox.open.zoomed {
     display: block;
@@ -197,11 +198,18 @@
     opacity: 1;
   }
   .lb-dots .dot {
+    /* Explicit display + min-width/height belt-and-braces: inline
+       <span>s as flex items have historically shipped at 0×0 on
+       iOS Safari unless one of these is spelled out. */
+    display: block;
+    flex: 0 0 auto;
     width: 6px;
     height: 6px;
+    min-width: 6px;
+    min-height: 6px;
     border-radius: 999px;
     background: var(--fg);
-    opacity: 0.3;
+    opacity: 0.35;
     transition: opacity 200ms ease;
   }
   .lb-dots .dot.active {
@@ -242,9 +250,10 @@
     .lb-prev { left: 4px; }
     .lb-next { right: 4px; }
     /* Dots sit above the bottom control row on mobile so they don't
-       collide with the Close button. */
+       collide with the Close button. max()+env() nesting has been
+       shaky on older iOS, so use env() with a straight fallback. */
     .lb-dots {
-      bottom: calc(max(24px, env(safe-area-inset-bottom, 0)) + 72px);
+      bottom: calc(env(safe-area-inset-bottom, 24px) + 92px);
     }
   }
 </style>
