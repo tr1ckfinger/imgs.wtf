@@ -187,7 +187,8 @@
     bottom: 24px;
     display: none;
     justify-content: center;
-    gap: 5px;
+    /* No `gap`: we use per-dot margin instead so hidden (0-width)
+       dots don't leave gap-space behind during transitions. */
     z-index: 200;
     pointer-events: none;
     opacity: 0;
@@ -204,6 +205,7 @@
   .lb-dots :global(.dot) {
     display: block;
     flex: 0 0 auto;
+    margin: 0 2.5px;
     width: 6px;
     height: 6px;
     min-width: 6px;
@@ -211,8 +213,9 @@
     border-radius: 999px;
     background: var(--fg);
     opacity: 0.35;
-    transition: width 180ms ease, height 180ms ease, min-width 180ms ease,
-      min-height 180ms ease, opacity 180ms ease, background-color 180ms ease;
+    transition: width 220ms ease, height 220ms ease, min-width 220ms ease,
+      min-height 220ms ease, margin 220ms ease, opacity 220ms ease,
+      background-color 220ms ease;
   }
   /* Graduated shrink toward the truncated edge, Instagram-style. */
   .lb-dots :global(.dot.small) {
@@ -228,9 +231,23 @@
     min-height: 4px;
     opacity: 0.2;
   }
+  /* Dots outside the 5-dot visible window collapse to zero size so
+     they don't take up strip width, but stay in the DOM so the
+     transitions fire when the active index moves and they slide in
+     or out of the window. */
+  .lb-dots :global(.dot.hidden) {
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    opacity: 0;
+  }
+  /* Active uses the same foreground colour as the inactive dots but
+     at full opacity — white-ish in dark mode, near-black in light
+     mode. Keeps the indicator neutral instead of a branded blue. */
   .lb-dots :global(.dot.active) {
     opacity: 1;
-    background: #4a6cf7;
   }
 
   @media (max-width: 700px) {
@@ -346,12 +363,29 @@
   // dots closest to whichever edge still has hidden items beyond it.
   const MAX_VISIBLE_DOTS = 5;
 
+  // Build one span per image up front. Keeping the DOM stable lets CSS
+  // transitions fire on navigation (size + opacity animate as the
+  // active dot moves and the window scrolls). Out-of-window dots
+  // collapse to zero size via the `.hidden` class.
   function renderDots() {
     lbDots.innerHTML = '';
     if (!isAlbumPage || thumbs.length <= 1) {
       lbDots.classList.remove('visible');
       return;
     }
+    const frag = document.createDocumentFragment();
+    for (let j = 0; j < thumbs.length; j++) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      frag.appendChild(dot);
+    }
+    lbDots.appendChild(frag);
+    lbDots.classList.add('visible');
+    updateDotStates();
+  }
+
+  function updateDotStates() {
+    if (!isAlbumPage || thumbs.length <= 1) return;
     const N = thumbs.length;
     const visibleCount = Math.min(MAX_VISIBLE_DOTS, N);
     // Centre active when possible; clamp so the window never falls off
@@ -364,24 +398,24 @@
     const truncLeft = windowStart > 0;
     const truncRight = windowEnd < N - 1;
 
-    const frag = document.createDocumentFragment();
-    for (let j = windowStart; j <= windowEnd; j++) {
-      const dot = document.createElement('span');
+    const dots = lbDots.children;
+    for (let j = 0; j < dots.length; j++) {
+      const dot = dots[j] as HTMLElement;
       let cls = 'dot';
-      if (j === currentIndex) cls += ' active';
-      // Outermost dot on a truncated side → tiny; the next one → small.
-      // Active never gets shrunk — it always reads full-size + coloured.
-      if (j !== currentIndex) {
+      const inWindow = j >= windowStart && j <= windowEnd;
+      if (!inWindow) {
+        cls += ' hidden';
+      } else if (j === currentIndex) {
+        cls += ' active';
+      } else {
+        // Outermost dot on a truncated side → tiny; the next one → small.
         if (truncLeft && j === windowStart) cls += ' tiny';
         else if (truncLeft && j === windowStart + 1) cls += ' small';
         else if (truncRight && j === windowEnd) cls += ' tiny';
         else if (truncRight && j === windowEnd - 1) cls += ' small';
       }
       dot.className = cls;
-      frag.appendChild(dot);
     }
-    lbDots.appendChild(frag);
-    lbDots.classList.add('visible');
   }
 
   function openLightbox(thumb: HTMLImageElement) {
@@ -510,9 +544,9 @@
       const albumSlug = newThumb.dataset.album;
       if (albumSlug) lbAlbum.href = `/${albumSlug}`;
     } else {
-      // Re-render dots (sizing depends on the active index — dots
-      // near a truncated edge shrink, so the whole strip may change).
-      renderDots();
+      // Update dot state — classes only, no DOM churn. CSS transitions
+      // animate sizes and opacity as the window and active shift.
+      updateDotStates();
     }
 
     updateNavState();
