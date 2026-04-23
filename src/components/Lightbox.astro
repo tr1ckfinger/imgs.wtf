@@ -209,11 +209,27 @@
     min-height: 6px;
     border-radius: 999px;
     background: var(--fg);
-    opacity: 0.35;
-    transition: opacity 200ms ease;
+    opacity: 0.25;
+    transition: width 180ms ease, height 180ms ease, min-width 180ms ease,
+      min-height 180ms ease, opacity 180ms ease, background-color 180ms ease;
+  }
+  /* Graduated shrink toward the truncated edge, Instagram-style. */
+  .lb-dots .dot.small {
+    width: 5px;
+    height: 5px;
+    min-width: 5px;
+    min-height: 5px;
+  }
+  .lb-dots .dot.tiny {
+    width: 4px;
+    height: 4px;
+    min-width: 4px;
+    min-height: 4px;
+    opacity: 0.2;
   }
   .lb-dots .dot.active {
     opacity: 1;
+    background: #4a6cf7;
   }
 
   @media (max-width: 700px) {
@@ -322,25 +338,47 @@
     lbNext.disabled = currentIndex >= thumbs.length - 1;
   }
 
+  // Instagram-style windowed pagination: show up to MAX_VISIBLE dots at
+  // a time, centre the active dot when possible, and shrink the two
+  // dots closest to whichever edge still has hidden items beyond it.
+  const MAX_VISIBLE_DOTS = 5;
+
   function renderDots() {
     lbDots.innerHTML = '';
     if (!isAlbumPage || thumbs.length <= 1) {
       lbDots.classList.remove('visible');
       return;
     }
+    const N = thumbs.length;
+    const visibleCount = Math.min(MAX_VISIBLE_DOTS, N);
+    // Centre active when possible; clamp so the window never falls off
+    // either end of the list.
+    const windowStart =
+      N <= MAX_VISIBLE_DOTS
+        ? 0
+        : Math.max(0, Math.min(currentIndex - 2, N - MAX_VISIBLE_DOTS));
+    const windowEnd = windowStart + visibleCount - 1;
+    const truncLeft = windowStart > 0;
+    const truncRight = windowEnd < N - 1;
+
     const frag = document.createDocumentFragment();
-    for (let i = 0; i < thumbs.length; i++) {
+    for (let j = windowStart; j <= windowEnd; j++) {
       const dot = document.createElement('span');
-      dot.className = 'dot' + (i === currentIndex ? ' active' : '');
+      let cls = 'dot';
+      if (j === currentIndex) cls += ' active';
+      // Outermost dot on a truncated side → tiny; the next one → small.
+      // Active never gets shrunk — it always reads full-size + coloured.
+      if (j !== currentIndex) {
+        if (truncLeft && j === windowStart) cls += ' tiny';
+        else if (truncLeft && j === windowStart + 1) cls += ' small';
+        else if (truncRight && j === windowEnd) cls += ' tiny';
+        else if (truncRight && j === windowEnd - 1) cls += ' small';
+      }
+      dot.className = cls;
       frag.appendChild(dot);
     }
     lbDots.appendChild(frag);
     lbDots.classList.add('visible');
-  }
-
-  function setActiveDot(index: number) {
-    const dots = lbDots.querySelectorAll('.dot');
-    dots.forEach((d, i) => d.classList.toggle('active', i === index));
   }
 
   function openLightbox(thumb: HTMLImageElement) {
@@ -469,7 +507,9 @@
       const albumSlug = newThumb.dataset.album;
       if (albumSlug) lbAlbum.href = `/${albumSlug}`;
     } else {
-      setActiveDot(currentIndex);
+      // Re-render dots (sizing depends on the active index — dots
+      // near a truncated edge shrink, so the whole strip may change).
+      renderDots();
     }
 
     updateNavState();
