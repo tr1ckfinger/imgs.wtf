@@ -187,6 +187,9 @@
     bottom: 24px;
     display: none;
     justify-content: center;
+    /* Centre dots vertically so 4/5/6px sizes share a midline
+       instead of sitting on a shared bottom edge. */
+    align-items: center;
     /* No `gap`: we use per-dot margin instead so hidden (0-width)
        dots don't leave gap-space behind during transitions. */
     z-index: 200;
@@ -213,9 +216,14 @@
     border-radius: 999px;
     background: var(--fg);
     opacity: 0.35;
+    /* Size/margin animate slow + smooth (window shift motion).
+       Opacity animates fast + ease-out so the active/inactive swap
+       reads as an instant hand-off — the new dot lights up exactly
+       as the old one dims, instead of both hanging in an ambiguous
+       mid-state during the slower crossfade. */
     transition: width 220ms ease, height 220ms ease, min-width 220ms ease,
-      min-height 220ms ease, margin 220ms ease, opacity 220ms ease,
-      background-color 220ms ease;
+      min-height 220ms ease, margin 220ms ease, opacity 140ms ease-out,
+      background-color 140ms ease-out;
   }
   /* Graduated shrink toward the truncated edge, Instagram-style. */
   .lb-dots :global(.dot.small) {
