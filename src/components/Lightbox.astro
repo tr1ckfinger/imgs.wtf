@@ -209,7 +209,7 @@
     min-height: 6px;
     border-radius: 999px;
     background: var(--fg);
-    opacity: 0.25;
+    opacity: 0.35;
     transition: width 180ms ease, height 180ms ease, min-width 180ms ease,
       min-height 180ms ease, opacity 180ms ease, background-color 180ms ease;
   }
@@ -233,11 +233,10 @@
   }
 
   @media (max-width: 700px) {
-    /* Extra bottom padding reserves room for the dot strip AND the
-       fixed control row so a tall portrait image never extends into
-       either. 128px ≈ 52 (button height) + 24 (baseline offset) + 20
-       (gap) + 32 (dot strip). */
-    .lightbox { padding: 16px 16px 128px; }
+    /* Extra bottom padding reserves room for the fixed controls so a
+       tall portrait image never extends into the button zone. 96px =
+       52 (button height) + 24 (baseline offset) + 20 (visual gap). */
+    .lightbox { padding: 16px 16px 96px; }
     .lb-close {
       top: auto;
       bottom: max(24px, env(safe-area-inset-bottom, 0));
@@ -266,28 +265,13 @@
     .lb-nav:hover { background: transparent; }
     .lb-prev { left: 4px; }
     .lb-next { right: 4px; }
-    /* Dots sit ~100px above the viewport bottom — comfortably above
-       the close button (which tops out around 76–86px) and clear of
-       the image's bottom edge (padding-bottom: 128px). */
+    /* Dots sit on the same baseline as the close button — horizontally
+       centred, vertically aligned to the X's mid-line. Close button:
+       bottom = max(24, env), height 52, so vertical centre is
+       (bottom + 26) from the viewport bottom. For a 6px dot to share
+       that centre, dot bottom = close-bottom + 23. */
     .lb-dots {
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
-    }
-    /* Dots on mobile overlay the (solid) lightbox bg in the dot strip
-       area below the image. Using white + drop-shadow mirrors the nav
-       arrow treatment so a dot reads on any background. The active
-       dot keeps the accent blue but also carries the shadow so it
-       pops against both light and dark photos. */
-    .lb-dots .dot {
-      background: #ffffff;
-      opacity: 0.6;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
-    }
-    .lb-dots .dot.tiny {
-      opacity: 0.4;
-    }
-    .lb-dots .dot.active {
-      background: #4a6cf7;
-      opacity: 1;
+      bottom: calc(max(24px, env(safe-area-inset-bottom, 0px)) + 23px);
     }
   }
 </style>
