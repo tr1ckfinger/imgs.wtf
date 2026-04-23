@@ -233,10 +233,11 @@
   }
 
   @media (max-width: 700px) {
-    /* Extra bottom padding reserves room for the fixed controls so a
-       tall portrait image never extends into the button zone. 96px =
-       52 (button height) + 24 (baseline offset) + 20 (visual gap). */
-    .lightbox { padding: 16px 16px 96px; }
+    /* Extra bottom padding reserves room for the dot strip AND the
+       fixed control row so a tall portrait image never extends into
+       either. 128px ≈ 52 (button height) + 24 (baseline offset) + 20
+       (gap) + 32 (dot strip). */
+    .lightbox { padding: 16px 16px 128px; }
     .lb-close {
       top: auto;
       bottom: max(24px, env(safe-area-inset-bottom, 0));
@@ -265,11 +266,28 @@
     .lb-nav:hover { background: transparent; }
     .lb-prev { left: 4px; }
     .lb-next { right: 4px; }
-    /* Dots sit above the bottom control row on mobile so they don't
-       collide with the Close button. max()+env() nesting has been
-       shaky on older iOS, so use env() with a straight fallback. */
+    /* Dots sit ~100px above the viewport bottom — comfortably above
+       the close button (which tops out around 76–86px) and clear of
+       the image's bottom edge (padding-bottom: 128px). */
     .lb-dots {
-      bottom: calc(env(safe-area-inset-bottom, 24px) + 92px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+    }
+    /* Dots on mobile overlay the (solid) lightbox bg in the dot strip
+       area below the image. Using white + drop-shadow mirrors the nav
+       arrow treatment so a dot reads on any background. The active
+       dot keeps the accent blue but also carries the shadow so it
+       pops against both light and dark photos. */
+    .lb-dots .dot {
+      background: #ffffff;
+      opacity: 0.6;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+    }
+    .lb-dots .dot.tiny {
+      opacity: 0.4;
+    }
+    .lb-dots .dot.active {
+      background: #4a6cf7;
+      opacity: 1;
     }
   }
 </style>
