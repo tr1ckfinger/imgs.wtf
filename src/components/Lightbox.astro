@@ -432,9 +432,12 @@
     currentIndex = thumbs.indexOf(thumb);
     isAlbumPage = !thumb.dataset.album;
 
-    // Clear any lingering transform from a previous slide so the
-    // FLIP open animation starts from a known state.
+    // Clear any lingering transform / transition state from a
+    // previous slide or pinch so the FLIP open animation starts from
+    // a known baseline.
     lbImg.style.transform = '';
+    lbImg.style.transition = '';
+    lbImg.style.transformOrigin = '';
     lbImg.style.opacity = '';
 
     // Use the already-loaded thumbnail src for instant display.
@@ -466,7 +469,11 @@
     isOpen = true;
   }
 
-  async function goTo(newIndex: number, direction: 'next' | 'prev') {
+  async function goTo(
+    newIndex: number,
+    direction: 'next' | 'prev',
+    currentDx: number = 0
+  ) {
     if (!isOpen || animating) return;
     if (newIndex < 0 || newIndex >= thumbs.length) return;
     if (newIndex === currentIndex) return;
@@ -501,6 +508,9 @@
     // rect. We'll animate the clone OUT to one side while the live
     // <img> (with its src swapped to the now-decoded new image)
     // animates IN from the opposite side.
+    // Note: getBoundingClientRect() reflects the applied transform, so
+    // if currentDx != 0 the clone is pinned at the already-dragged
+    // visual position — exactly where the user's finger released it.
     const rect = lbImg.getBoundingClientRect();
     const outgoing = document.createElement('img');
     outgoing.src = lbImg.currentSrc || lbImg.src;
@@ -524,20 +534,38 @@
     const outDx = direction === 'next' ? -vw : vw;
     const inStartDx = direction === 'next' ? vw : -vw;
 
-    const duration = 320;
+    // Scale the animation shorter when a drag already carried the
+    // image most of the way across — but never faster than 160ms, so
+    // even fast flicks still feel like a transition rather than a pop.
+    const progress = Math.min(1, Math.abs(currentDx) / vw);
+    const duration = Math.max(160, Math.round(320 - progress * 180));
     const easing = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
+    // The clone sits at rect (= natural + currentDx). For it to end up
+    // fully off-screen (at natural + outDx) its transform needs to
+    // travel (outDx - currentDx) more — less distance when the drag
+    // already did the work, which is what makes a near-committed drag
+    // commit almost instantly.
+    const cloneEndDx = outDx - currentDx;
+
     const outAnim = outgoing.animate(
-      [{ transform: 'translateX(0)' }, { transform: `translateX(${outDx}px)` }],
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${cloneEndDx}px)` }],
       { duration, easing, fill: 'forwards' }
     );
+    // fill:'forwards' holds lbImg at translateX(0) after the animation
+    // finishes; without it the effect value would drop and lbImg would
+    // snap back to its (stale) inline transform from the drag. Cleanup
+    // clears inline styles before cancelling the fill.
     const inAnim = lbImg.animate(
       [{ transform: `translateX(${inStartDx}px)` }, { transform: 'translateX(0)' }],
-      { duration, easing }
+      { duration, easing, fill: 'forwards' }
     );
 
     const cleanup = () => {
       outgoing.remove();
+      lbImg.style.transform = '';
+      lbImg.style.transition = '';
+      inAnim.cancel();
       animating = false;
     };
     Promise.all([outAnim.finished, inAnim.finished]).then(cleanup, cleanup);
@@ -611,8 +639,15 @@
       lbImg.src = '';
       lbImg.style.width = '';
       lbImg.style.height = '';
+      lbImg.style.transform = '';
+      lbImg.style.transition = '';
+      lbImg.style.transformOrigin = '';
       sourceEl = null;
       isOpen = false;
+      touchMode = 'none';
+      touchDx = 0;
+      touchDy = 0;
+      touchMoved = false;
     };
 
     if (!sourceEl) {
@@ -712,80 +747,260 @@
     toggleZoom(e.clientX, e.clientY);
   });
 
-  // Touch handling on the lightbox image. We track touchstart → end
-  // once and dispatch based on the gesture shape:
-  //   - horizontal swipe past the threshold → prev / next
-  //   - quick stationary tap within 320ms of another → double-tap zoom
-  //   - everything else → no-op (swallowed so the overlay click
-  //     handler doesn't treat it as a close tap)
-  const SWIPE_THRESHOLD = 50;
-  const SWIPE_MAX_TIME = 600;
-  const DOUBLE_TAP_WINDOW = 320;
-  const DOUBLE_TAP_MOVE_LIMIT = 20;
+  // Touch handling on the whole lightbox (not just the image) so the
+  // user can swipe anywhere on screen to navigate. Three gesture
+  // modes, chosen at touchstart / touchmove time:
+  //   - 'drag'  : one finger, moved past the tap threshold →
+  //               translate lbImg 1:1 with the finger, commit or
+  //               spring back on release
+  //   - 'pinch' : two fingers → scale lbImg locally without zooming
+  //               the page, snap back to 1× on release (peek-zoom)
+  //   - 'none'  : short/stationary touches fall through to the
+  //               synthesized click (backdrop → close, image →
+  //               double-tap zoom on mobile / toggleZoom on desktop)
+  type TouchMode = 'none' | 'drag' | 'pinch';
 
+  const SWIPE_COMMIT_FRACTION = 0.22; // 22% of viewport width → commit
+  const FLICK_MIN_DX = 60;
+  const FLICK_MAX_TIME = 300;
+  const DOUBLE_TAP_WINDOW = 320;
+  const TAP_MOVE_LIMIT = 10;
+  const BOUNDARY_RESISTANCE = 0.3;
+  const PINCH_MIN_SCALE = 1;
+  const PINCH_MAX_SCALE = 4;
+
+  let touchMode: TouchMode = 'none';
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartT = 0;
-  let touchTracking = false;
-  let lastTouch = 0;
+  let touchDx = 0; // latest applied horizontal offset
+  let touchDy = 0;
+  let touchMoved = false; // crossed TAP_MOVE_LIMIT — don't let click fire
+  let pinchStartDist = 0;
+  let pinchScale = 1;
+  let lastTap = 0;
 
-  lbImg.addEventListener(
+  function pinchDistance(a: Touch, b: Touch) {
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // Controls handle their own pointer interactions — don't hijack
+  // touches that land on them.
+  function isOnControl(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
+    return !!target.closest('.lb-close, .lb-album, .lb-nav');
+  }
+
+  function beginPinch(touches: TouchList) {
+    touchMode = 'pinch';
+    pinchStartDist = pinchDistance(touches[0], touches[1]);
+    pinchScale = 1;
+    // Pin the transform origin to the midpoint of the two fingers as a
+    // fraction of the image so the zoom appears to happen *under* the
+    // pinch, not from the image centre.
+    const midX = (touches[0].clientX + touches[1].clientX) / 2;
+    const midY = (touches[0].clientY + touches[1].clientY) / 2;
+    const r = lbImg.getBoundingClientRect();
+    const ox = r.width > 0 ? ((midX - r.left) / r.width) * 100 : 50;
+    const oy = r.height > 0 ? ((midY - r.top) / r.height) * 100 : 50;
+    lbImg.style.transformOrigin = `${Math.max(0, Math.min(100, ox))}% ${Math.max(0, Math.min(100, oy))}%`;
+    lbImg.style.transition = 'none';
+    // A pinch replaces any in-flight drag offset.
+    touchDx = 0;
+    touchDy = 0;
+    lbImg.style.transform = 'scale(1)';
+  }
+
+  function endPinch() {
+    // Peek-zoom: release → animate back to 1×. Not persistent; we
+    // don't clamp the view like zoomed mode does.
+    lbImg.style.transition = 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+    lbImg.style.transform = '';
+    const clearInline = () => {
+      lbImg.style.transition = '';
+      lbImg.style.transformOrigin = '';
+      lbImg.removeEventListener('transitionend', clearInline);
+    };
+    lbImg.addEventListener('transitionend', clearInline);
+    touchMode = 'none';
+    pinchScale = 1;
+  }
+
+  function springBackDrag() {
+    lbImg.style.transition = 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+    lbImg.style.transform = '';
+    const clearInline = () => {
+      lbImg.style.transition = '';
+      lbImg.removeEventListener('transitionend', clearInline);
+    };
+    lbImg.addEventListener('transitionend', clearInline);
+    touchMode = 'none';
+    touchDx = 0;
+    touchDy = 0;
+  }
+
+  lightbox.addEventListener(
     'touchstart',
     (e) => {
-      if (e.touches.length !== 1) {
-        touchTracking = false;
+      if (!isOpen) return;
+      if (isOnControl(e.target)) return;
+
+      // Any 2-finger touch enters pinch mode, even if a 1-finger drag
+      // was in progress.
+      if (e.touches.length >= 2) {
+        // If we were mid-drag, abandon the drag visually (pinch will
+        // override transform).
+        beginPinch(e.touches);
         return;
       }
+
+      // Ignore additional 1-finger starts while a pinch is still active.
+      if (touchMode === 'pinch') return;
+
       const t = e.touches[0];
       touchStartX = t.clientX;
       touchStartY = t.clientY;
       touchStartT = Date.now();
-      touchTracking = true;
+      touchDx = 0;
+      touchDy = 0;
+      touchMoved = false;
+      // Provisional — we don't commit visuals until movement crosses
+      // TAP_MOVE_LIMIT, so a stationary tap still reaches its click.
+      touchMode = 'drag';
     },
     { passive: true }
   );
 
-  lbImg.addEventListener(
-    'touchend',
+  lightbox.addEventListener(
+    'touchmove',
     (e) => {
-      if (!touchTracking || e.changedTouches.length === 0) return;
-      touchTracking = false;
+      if (!isOpen) return;
 
-      const t = e.changedTouches[0];
-      const dx = t.clientX - touchStartX;
-      const dy = t.clientY - touchStartY;
-      const dt = Date.now() - touchStartT;
-      const absDx = Math.abs(dx);
-      const absDy = Math.abs(dy);
-
-      // Horizontal swipe (only when not zoomed — pinch/scroll panning
-      // while zoomed must not be hijacked as navigation).
-      if (
-        !zoomed &&
-        absDx > SWIPE_THRESHOLD &&
-        absDx > absDy * 1.5 &&
-        dt < SWIPE_MAX_TIME
-      ) {
-        if (dx > 0) prev();
-        else next();
+      if (touchMode === 'pinch' && e.touches.length >= 2) {
+        const d = pinchDistance(e.touches[0], e.touches[1]);
+        const raw = pinchStartDist > 0 ? d / pinchStartDist : 1;
+        pinchScale = Math.max(PINCH_MIN_SCALE, Math.min(PINCH_MAX_SCALE, raw));
+        lbImg.style.transform = `scale(${pinchScale})`;
+        // Stop iOS from zooming the page on top of our local pinch.
         e.preventDefault();
-        lastTouch = 0;
         return;
       }
 
-      // Double-tap zoom: only counts as a tap if the finger barely
-      // moved. This prevents a short swipe from registering as a tap.
-      if (absDx < DOUBLE_TAP_MOVE_LIMIT && absDy < DOUBLE_TAP_MOVE_LIMIT) {
-        const now = Date.now();
-        if (now - lastTouch < DOUBLE_TAP_WINDOW) {
-          toggleZoom(t.clientX, t.clientY);
-          e.preventDefault();
-          lastTouch = 0;
+      if (
+        touchMode === 'drag' &&
+        e.touches.length === 1 &&
+        !zoomed &&
+        !animating
+      ) {
+        const t = e.touches[0];
+        const dx = t.clientX - touchStartX;
+        const dy = t.clientY - touchStartY;
+
+        // Under the tap threshold: don't commit visuals or preventDefault
+        // — keeps the synthesized click intact for backdrop-close etc.
+        if (!touchMoved && Math.abs(dx) < TAP_MOVE_LIMIT && Math.abs(dy) < TAP_MOVE_LIMIT) {
           return;
         }
-        lastTouch = now;
+        touchMoved = true;
+
+        // Rubber-band past the list ends: the image still follows the
+        // finger so the gesture feels responsive, but at 30% of the
+        // finger's travel so it reads as "no more images".
+        const atStart = currentIndex <= 0;
+        const atEnd = currentIndex >= thumbs.length - 1;
+        let appliedDx = dx;
+        if ((atStart && dx > 0) || (atEnd && dx < 0)) {
+          appliedDx = dx * BOUNDARY_RESISTANCE;
+        }
+
+        touchDx = appliedDx;
+        touchDy = dy;
+        lbImg.style.transition = 'none';
+        lbImg.style.transform = `translateX(${appliedDx}px)`;
+        e.preventDefault();
       }
     },
     { passive: false }
+  );
+
+  lightbox.addEventListener(
+    'touchend',
+    (e) => {
+      if (!isOpen) return;
+
+      if (touchMode === 'pinch') {
+        // Wait until every finger is lifted before snapping back.
+        if (e.touches.length >= 1) return;
+        endPinch();
+        return;
+      }
+
+      if (touchMode !== 'drag') return;
+
+      const t = e.changedTouches[0];
+
+      // Tap: no meaningful movement happened. Let the click event fire
+      // naturally so backdrop-close / image-double-tap still work.
+      if (!touchMoved) {
+        touchMode = 'none';
+
+        // Double-tap on the image zooms in (mobile only — desktop
+        // uses the single click handler on lbImg).
+        if (isTouchDevice && t && t.target === lbImg) {
+          const now = Date.now();
+          if (now - lastTap < DOUBLE_TAP_WINDOW) {
+            toggleZoom(t.clientX, t.clientY);
+            e.preventDefault();
+            lastTap = 0;
+            return;
+          }
+          lastTap = now;
+        }
+        return;
+      }
+
+      // Drag ended past the tap threshold: decide commit vs spring back.
+      const dt = Date.now() - touchStartT;
+      const dx = touchDx;
+      const absDx = Math.abs(dx);
+      const vw = window.innerWidth;
+      const pastFraction = absDx > vw * SWIPE_COMMIT_FRACTION;
+      const flick = absDx > FLICK_MIN_DX && dt < FLICK_MAX_TIME;
+      const committed = pastFraction || flick;
+
+      if (committed && dx < 0 && currentIndex < thumbs.length - 1) {
+        // Pass the live offset to goTo so the clone / incoming image
+        // continue from the finger's release point instead of snapping
+        // back and replaying the full slide.
+        touchMode = 'none';
+        goTo(currentIndex + 1, 'next', dx);
+        e.preventDefault();
+        return;
+      }
+
+      if (committed && dx > 0 && currentIndex > 0) {
+        touchMode = 'none';
+        goTo(currentIndex - 1, 'prev', dx);
+        e.preventDefault();
+        return;
+      }
+
+      // Not enough movement / at a boundary → spring back.
+      springBackDrag();
+      e.preventDefault();
+    },
+    { passive: false }
+  );
+
+  lightbox.addEventListener(
+    'touchcancel',
+    () => {
+      if (touchMode === 'pinch') endPinch();
+      else if (touchMode === 'drag' && touchMoved) springBackDrag();
+      else touchMode = 'none';
+    },
+    { passive: true }
   );
 </script>
