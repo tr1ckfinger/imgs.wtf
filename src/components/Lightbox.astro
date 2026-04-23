@@ -322,6 +322,10 @@
   let isAlbumPage = false;
   let isOpen = false;
   let zoomed = false;
+  // Multiplicative zoom factor applied to the baseline rendered size.
+  // Driven by zoomIn / resetZoom; lets a follow-up pinch layer on top
+  // of an already-zoomed image (new factor = old × pinch ratio).
+  let currentZoomFactor = 1;
   // Guards a slide from being interrupted mid-way; taps / keys /
   // swipes during a slide are dropped rather than queued.
   let animating = false;
@@ -709,6 +713,7 @@
   function resetZoom() {
     if (!zoomed) return;
     zoomed = false;
+    currentZoomFactor = 1;
     lightbox.classList.remove('zoomed');
     lbImg.style.width = '';
     lbImg.style.height = '';
@@ -728,6 +733,7 @@
     lbImg.style.height = `${newHeight}px`;
     lightbox.classList.add('zoomed');
     zoomed = true;
+    currentZoomFactor = factor;
 
     requestAnimationFrame(() => {
       lightbox.scrollLeft = relX * newWidth - x;
@@ -811,8 +817,12 @@
   const DOUBLE_TAP_WINDOW = 320;
   const TAP_MOVE_LIMIT = 10;
   const BOUNDARY_RESISTANCE = 0.3;
-  const PINCH_MIN_SCALE = 1;
-  const PINCH_MAX_SCALE = 4;
+  // Pinch is clamped to a gesture-local ratio — not the total zoom.
+  // 0.4 lets you pinch-out from a zoomed state down to 40% of the
+  // pre-pinch size (effectively zooming out past baseline, which then
+  // exits zoom via the commit threshold).
+  const PINCH_MIN_SCALE = 0.4;
+  const PINCH_MAX_SCALE = 5;
   // Pinch > this on release → commit to persistent zoom (below this
   // the gesture reads as "I changed my mind", so we snap back).
   const PINCH_COMMIT_SCALE = 1.05;
@@ -822,8 +832,8 @@
   const CLOSE_COMMIT_DY = 120;
   const CLOSE_COMMIT_FRACTION = 0.18;
   const CLOSE_FLICK_VY = 0.7; // px per ms → committed even if short
-  const VERTICAL_SCALE_MIN = 0.78;
-  const VERTICAL_FADE_FULL_DY = 500; // dy at which backdrop reaches min opacity
+  const VERTICAL_SCALE_MIN = 0.82;
+  const VERTICAL_SCALE_FULL_DY = 500; // dy at which the shrink bottoms out
 
   let touchMode: TouchMode = 'none';
   let dragAxis: DragAxis = null;
@@ -833,10 +843,21 @@
   let touchDx = 0; // latest applied horizontal offset
   let touchDy = 0; // latest applied vertical offset
   let touchMoved = false; // crossed TAP_MOVE_LIMIT — don't let click fire
+  // Pinch state. `pinchOxPx` / `pinchOyPx` are the pinch midpoint in
+  // lbImg box coords at pinch start (pre-transform), in pixels. We
+  // anchor scaling to that point via an explicit translate3d+scale
+  // transform (transform-origin: 0 0) rather than a percentage origin,
+  // which both feels smoother and makes the commit math trivial.
   let pinchStartDist = 0;
   let pinchScale = 1;
   let pinchMidX = 0;
   let pinchMidY = 0;
+  let pinchOxPx = 0;
+  let pinchOyPx = 0;
+  let pinchBaseWidth = 0;
+  let pinchBaseHeight = 0;
+  let pinchBaseZoomFactor = 1;
+  let pinchRafPending = false;
   let lastTap = 0;
 
   function pinchDistance(a: Touch, b: Touch) {
@@ -856,70 +877,125 @@
     touchMode = 'pinch';
     pinchStartDist = pinchDistance(touches[0], touches[1]);
     pinchScale = 1;
-    // Pin the transform origin to the midpoint of the two fingers as a
-    // fraction of the image so the zoom appears to happen *under* the
-    // pinch, not from the image centre. Also save the midpoint in
-    // viewport coords for the zoom-commit handoff.
     pinchMidX = (touches[0].clientX + touches[1].clientX) / 2;
     pinchMidY = (touches[0].clientY + touches[1].clientY) / 2;
     const r = lbImg.getBoundingClientRect();
-    const ox = r.width > 0 ? ((pinchMidX - r.left) / r.width) * 100 : 50;
-    const oy = r.height > 0 ? ((pinchMidY - r.top) / r.height) * 100 : 50;
-    lbImg.style.transformOrigin = `${Math.max(0, Math.min(100, ox))}% ${Math.max(0, Math.min(100, oy))}%`;
+    pinchBaseWidth = r.width;
+    pinchBaseHeight = r.height;
+    pinchBaseZoomFactor = currentZoomFactor;
+    // Midpoint in lbImg box coordinates (pixels from its top-left),
+    // pre-transform. Clamp into the box so an off-image pinch still
+    // anchors at the nearest edge rather than wildly off-screen.
+    pinchOxPx = Math.max(0, Math.min(r.width, pinchMidX - r.left));
+    pinchOyPx = Math.max(0, Math.min(r.height, pinchMidY - r.top));
+    // Anchor at the box's top-left and express the pivot via an
+    // explicit translate. Avoids percentage-origin math which some
+    // browsers recompute on every frame, and keeps the commit
+    // calculation straightforward.
+    lbImg.style.transformOrigin = '0 0';
     lbImg.style.transition = 'none';
+    // Hint the compositor to promote lbImg to its own GPU layer for
+    // the duration of the pinch so scale changes don't repaint the
+    // image texture.
+    lbImg.style.willChange = 'transform';
     // A pinch replaces any in-flight drag offset.
     touchDx = 0;
     touchDy = 0;
     dragAxis = null;
-    lbImg.style.transform = 'scale(1)';
+    lbImg.style.transform = 'translate3d(0,0,0) scale(1)';
+  }
+
+  function applyPinchTransform() {
+    // translate + scale with origin (0,0) keeps (pinchOxPx, pinchOyPx)
+    // in image-box coords pinned to the viewport location where it was
+    // at pinch start, regardless of the current scale.
+    const s = pinchScale;
+    const tx = pinchOxPx * (1 - s);
+    const ty = pinchOyPx * (1 - s);
+    lbImg.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`;
   }
 
   function endPinch() {
-    const committedScale = pinchScale;
+    const finalScale = pinchScale;
+    const effective = pinchBaseZoomFactor * finalScale;
     const mx = pinchMidX;
     const my = pinchMidY;
+    const baseZoom = pinchBaseZoomFactor;
+    const baseWidth = pinchBaseWidth;
+    const baseHeight = pinchBaseHeight;
+    const ox = pinchOxPx;
+    const oy = pinchOyPx;
 
-    // Reset pinch state and drop the transform regardless of outcome:
-    // - If committing to zoomed mode, zoomIn sizes via width/height so
-    //   the scale-transform is no longer needed.
-    // - If snapping back, we want a tween from current scale → 1; for
-    //   that we run a short animation *before* clearing.
     touchMode = 'none';
     pinchScale = 1;
 
-    if (committedScale > PINCH_COMMIT_SCALE) {
-      // Commit: clear the pinch transform and promote to persistent
-      // zoom at the same final scale, anchored to the pinch midpoint.
-      // zoomIn reads lbImg.getBoundingClientRect(), which reflects the
-      // transformed rect — so we clear transform *first* to ensure it
-      // measures the natural size before multiplying by committedScale.
-      lbImg.style.transition = 'none';
-      lbImg.style.transform = '';
-      lbImg.style.transformOrigin = '';
-      zoomIn(mx, my, committedScale);
+    const dropWillChange = () => {
+      lbImg.style.willChange = '';
+    };
+
+    if (effective < PINCH_COMMIT_SCALE) {
+      // Not zoomed enough to commit — animate back to 1× and reset.
+      lbImg.style.transition =
+        'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+      lbImg.style.transform = 'translate3d(0,0,0) scale(1)';
+      const clearInline = () => {
+        lbImg.style.transition = '';
+        lbImg.style.transform = '';
+        lbImg.style.transformOrigin = '';
+        dropWillChange();
+        if (zoomed) resetZoom();
+        lbImg.removeEventListener('transitionend', clearInline);
+      };
+      lbImg.addEventListener('transitionend', clearInline);
       return;
     }
 
-    // Not zoomed enough to commit — smoothly return to 1×.
-    lbImg.style.transition = 'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)';
-    lbImg.style.transform = '';
-    const clearInline = () => {
-      lbImg.style.transition = '';
+    if (baseZoom <= 1) {
+      // Was not zoomed before the pinch — hand off to the existing
+      // width/height-based zoomed mode via zoomIn.
+      lbImg.style.transition = 'none';
+      lbImg.style.transform = '';
       lbImg.style.transformOrigin = '';
-      lbImg.removeEventListener('transitionend', clearInline);
-    };
-    lbImg.addEventListener('transitionend', clearInline);
+      dropWillChange();
+      zoomIn(mx, my, effective);
+      return;
+    }
+
+    // Was already zoomed: absorb the pinch transform into a new
+    // width/height + scroll state so the image stays visually
+    // continuous at the updated zoom level.
+    //
+    //   new size       = baseSize × finalScale
+    //   new scrollLeft = ox × finalScale − mx  (keeps pinch pivot fixed)
+    //   new scrollTop  = oy × finalScale − my
+    //
+    // Browser clamps scroll to valid range; Math.max(0,…) handles the
+    // short-content side where valid range collapses.
+    const newW = baseWidth * finalScale;
+    const newH = baseHeight * finalScale;
+    const newSx = ox * finalScale - mx;
+    const newSy = oy * finalScale - my;
+
+    lbImg.style.transition = 'none';
+    lbImg.style.transform = '';
+    lbImg.style.transformOrigin = '';
+    lbImg.style.width = `${newW}px`;
+    lbImg.style.height = `${newH}px`;
+    // Force a layout flush so the new size takes effect before we
+    // write scroll — otherwise scrollLeft/Top clamp against the stale
+    // size and clip.
+    void lightbox.offsetHeight;
+    lightbox.scrollLeft = Math.max(0, newSx);
+    lightbox.scrollTop = Math.max(0, newSy);
+    currentZoomFactor = effective;
+    dropWillChange();
   }
 
   function springBackDrag() {
     lbImg.style.transition = 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)';
     lbImg.style.transform = '';
-    // Fade the backdrop back to full opacity in tandem with the image.
-    lightbox.style.transition = 'opacity 240ms cubic-bezier(0.2, 0.8, 0.2, 1)';
-    lightbox.style.opacity = '';
     const clearInline = () => {
       lbImg.style.transition = '';
-      lightbox.style.transition = '';
       lbImg.removeEventListener('transitionend', clearInline);
     };
     lbImg.addEventListener('transitionend', clearInline);
@@ -969,7 +1045,16 @@
         const d = pinchDistance(e.touches[0], e.touches[1]);
         const raw = pinchStartDist > 0 ? d / pinchStartDist : 1;
         pinchScale = Math.max(PINCH_MIN_SCALE, Math.min(PINCH_MAX_SCALE, raw));
-        lbImg.style.transform = `scale(${pinchScale})`;
+        // rAF-throttle: multiple touchmove events in one frame collapse
+        // to a single transform write, which the compositor handles as
+        // one GPU update instead of N overlapping ones.
+        if (!pinchRafPending) {
+          pinchRafPending = true;
+          requestAnimationFrame(() => {
+            pinchRafPending = false;
+            if (touchMode === 'pinch') applyPinchTransform();
+          });
+        }
         // Stop iOS from zooming the page on top of our local pinch.
         e.preventDefault();
         return;
@@ -1002,19 +1087,17 @@
         }
 
         if (dragAxis === 'v') {
-          // Drag-down dismiss. Allow upward movement to register (we
-          // lock to the v axis and keep the image under the finger),
-          // but only downward past the threshold closes on release.
+          // Drag-down dismiss. The image tracks the finger and shrinks
+          // slightly as you pull down so there's a visual cue, but it
+          // stays fully opaque — no fade until the close is actually
+          // committed on release.
           touchDy = dy;
-          const downRatio = dy > 0 ? Math.min(1, dy / VERTICAL_FADE_FULL_DY) : 0;
-          // Shrink toward VERTICAL_SCALE_MIN as you pull down.
+          const downRatio =
+            dy > 0 ? Math.min(1, dy / VERTICAL_SCALE_FULL_DY) : 0;
           const scale = 1 - downRatio * (1 - VERTICAL_SCALE_MIN);
           lbImg.style.transition = 'none';
           lbImg.style.transformOrigin = '50% 50%';
           lbImg.style.transform = `translateY(${dy}px) scale(${scale})`;
-          // Fade the backdrop so the dismiss previews the end state.
-          lightbox.style.transition = 'none';
-          lightbox.style.opacity = String(1 - downRatio * 0.55);
           e.preventDefault();
           return;
         }
