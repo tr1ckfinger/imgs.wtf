@@ -7,6 +7,31 @@
 <div id="lightbox" class="lightbox" aria-hidden="true">
   <img id="lb-img" alt="" />
 </div>
+<button id="lb-prev" class="lb-nav lb-prev" aria-label="Previous image">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path
+      d="M15 5l-7 7 7 7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+</button>
+<button id="lb-next" class="lb-nav lb-next" aria-label="Next image">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <path
+      d="M9 5l7 7-7 7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+</button>
+<div id="lb-dots" class="lb-dots" aria-hidden="true"></div>
 <button id="lb-close" class="lb-close" aria-label="Close">
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
     <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -112,6 +137,77 @@
   }
   .lb-album:hover { background: var(--btn-bg-hover); }
 
+  /* Prev / next arrows. Desktop: pill with a background, matching the
+     existing Close / Go to album controls. On mobile this is
+     overridden to a bare SVG (no background) below. */
+  .lb-nav {
+    position: fixed;
+    top: 50%;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--fg);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 200;
+    transform: translateY(-50%);
+    transition: background 150ms ease, opacity 200ms ease;
+    display: none;
+    opacity: 0;
+  }
+  .lb-nav.visible {
+    display: flex;
+    opacity: 1;
+  }
+  .lb-nav:hover { background: var(--btn-bg-hover); }
+  .lb-nav[disabled] {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
+  }
+  .lb-nav.visible[disabled] {
+    opacity: 0.25;
+  }
+  .lb-prev { left: 24px; }
+  .lb-next { right: 24px; }
+
+  /* Album-view pagination dots, Instagram-style. Non-interactive
+     indicator only; pointer-events are off so they never swallow a
+     backdrop click. Small + fixed centre + subtle so they don't
+     compete with the image. */
+  .lb-dots {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    display: none;
+    justify-content: center;
+    gap: 5px;
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .lb-dots.visible {
+    display: flex;
+    opacity: 1;
+  }
+  .lb-dots .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--fg);
+    opacity: 0.3;
+    transition: opacity 200ms ease;
+  }
+  .lb-dots .dot.active {
+    opacity: 1;
+  }
+
   @media (max-width: 700px) {
     /* Extra bottom padding reserves room for the fixed controls so a
        tall portrait image never extends into the button zone. 96px =
@@ -132,6 +228,24 @@
       padding: 0 18px;
       font-size: 14px;
     }
+    /* On mobile the arrows overlay the image with no pill — just a
+       white chevron with a soft drop shadow so it reads against both
+       light and dark photos. */
+    .lb-nav {
+      width: 44px;
+      height: 44px;
+      background: transparent;
+      color: #ffffff;
+      filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+    }
+    .lb-nav:hover { background: transparent; }
+    .lb-prev { left: 4px; }
+    .lb-next { right: 4px; }
+    /* Dots sit above the bottom control row on mobile so they don't
+       collide with the Close button. */
+    .lb-dots {
+      bottom: calc(max(24px, env(safe-area-inset-bottom, 0)) + 72px);
+    }
   }
 </style>
 
@@ -140,18 +254,79 @@
   const lbImg = document.getElementById('lb-img') as HTMLImageElement;
   const lbClose = document.getElementById('lb-close') as HTMLButtonElement;
   const lbAlbum = document.getElementById('lb-album') as HTMLAnchorElement;
-  const thumbs = document.querySelectorAll<HTMLImageElement>('img.thumb');
+  const lbPrev = document.getElementById('lb-prev') as HTMLButtonElement;
+  const lbNext = document.getElementById('lb-next') as HTMLButtonElement;
+  const lbDots = document.getElementById('lb-dots') as HTMLDivElement;
+  const thumbs = Array.from(
+    document.querySelectorAll<HTMLImageElement>('img.thumb')
+  );
 
   let sourceEl: HTMLImageElement | null = null;
+  let currentIndex = -1;
+  // Dots only show on album pages. We distinguish them by checking
+  // whether the clicked thumb carries data-album: home-grid thumbs do
+  // (each represents an album), album-grid thumbs don't.
+  let isAlbumPage = false;
   let isOpen = false;
   let zoomed = false;
+  // Guards a slide from being interrupted mid-way; taps / keys /
+  // swipes during a slide are dropped rather than queued.
+  let animating = false;
 
   const ZOOM_FACTOR = 3.5;
   const isTouchDevice = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
+  function preloadFullFor(thumb: HTMLImageElement) {
+    const full = thumb.dataset.full;
+    if (full && full !== lbImg.src) {
+      const pre = new Image();
+      pre.onload = () => {
+        if (isOpen && sourceEl === thumb && !zoomed) lbImg.src = full;
+      };
+      pre.src = full;
+    }
+  }
+
+  function updateNavState() {
+    // Arrows stay visible but are disabled at the ends (no wrap).
+    const hasMultiple = thumbs.length > 1;
+    lbPrev.classList.toggle('visible', hasMultiple);
+    lbNext.classList.toggle('visible', hasMultiple);
+    lbPrev.disabled = currentIndex <= 0;
+    lbNext.disabled = currentIndex >= thumbs.length - 1;
+  }
+
+  function renderDots() {
+    lbDots.innerHTML = '';
+    if (!isAlbumPage || thumbs.length <= 1) {
+      lbDots.classList.remove('visible');
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < thumbs.length; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (i === currentIndex ? ' active' : '');
+      frag.appendChild(dot);
+    }
+    lbDots.appendChild(frag);
+    lbDots.classList.add('visible');
+  }
+
+  function setActiveDot(index: number) {
+    const dots = lbDots.querySelectorAll('.dot');
+    dots.forEach((d, i) => d.classList.toggle('active', i === index));
+  }
+
   function openLightbox(thumb: HTMLImageElement) {
     if (isOpen) return;
     sourceEl = thumb;
+    currentIndex = thumbs.indexOf(thumb);
+    isAlbumPage = !thumb.dataset.album;
+
+    // Clear any lingering transform from a previous slide so the
+    // FLIP open animation starts from a known state.
+    lbImg.style.transform = '';
+    lbImg.style.opacity = '';
 
     // Use the already-loaded thumbnail src for instant display.
     lbImg.src = thumb.currentSrc || thumb.src;
@@ -159,6 +334,7 @@
     const from = thumb.getBoundingClientRect();
     lightbox.classList.add('open');
     lbClose.classList.add('visible');
+    updateNavState();
 
     const albumSlug = thumb.dataset.album;
     if (albumSlug) {
@@ -168,22 +344,95 @@
       lbAlbum.classList.remove('visible');
     }
 
+    renderDots();
+
     lightbox.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
 
     requestAnimationFrame(() => runFlip(from, 'open'));
 
-    // Swap in higher-res version in the background if available.
-    const full = thumb.dataset.full;
-    if (full && full !== lbImg.src) {
-      const pre = new Image();
-      pre.onload = () => {
-        if (isOpen && sourceEl === thumb && !zoomed) lbImg.src = full;
-      };
-      pre.src = full;
-    }
+    preloadFullFor(thumb);
 
     isOpen = true;
+  }
+
+  function goTo(newIndex: number, direction: 'next' | 'prev') {
+    if (!isOpen || animating) return;
+    if (newIndex < 0 || newIndex >= thumbs.length) return;
+    if (newIndex === currentIndex) return;
+    if (zoomed) resetZoom();
+
+    const newThumb = thumbs[newIndex];
+
+    // Clone the current image and pin it absolutely at its on-screen
+    // rect. We'll animate the clone OUT to one side while the live
+    // <img> (with its src already swapped to the new image) animates
+    // IN from the opposite side.
+    const rect = lbImg.getBoundingClientRect();
+    const outgoing = document.createElement('img');
+    outgoing.src = lbImg.currentSrc || lbImg.src;
+    outgoing.alt = '';
+    outgoing.setAttribute('aria-hidden', 'true');
+    outgoing.style.position = 'fixed';
+    outgoing.style.top = rect.top + 'px';
+    outgoing.style.left = rect.left + 'px';
+    outgoing.style.width = rect.width + 'px';
+    outgoing.style.height = rect.height + 'px';
+    outgoing.style.pointerEvents = 'none';
+    outgoing.style.zIndex = '150';
+    outgoing.style.userSelect = 'none';
+    document.body.appendChild(outgoing);
+
+    animating = true;
+
+    // Swap to the (usually cached) thumb source instantly; the higher
+    // resolution dataset.full is preloaded in the background below.
+    lbImg.src = newThumb.currentSrc || newThumb.src;
+
+    const vw = window.innerWidth;
+    const outDx = direction === 'next' ? -vw : vw;
+    const inStartDx = direction === 'next' ? vw : -vw;
+
+    const duration = 320;
+    const easing = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+    const outAnim = outgoing.animate(
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${outDx}px)` }],
+      { duration, easing, fill: 'forwards' }
+    );
+    const inAnim = lbImg.animate(
+      [{ transform: `translateX(${inStartDx}px)` }, { transform: 'translateX(0)' }],
+      { duration, easing }
+    );
+
+    const cleanup = () => {
+      outgoing.remove();
+      animating = false;
+    };
+    Promise.all([outAnim.finished, inAnim.finished]).then(cleanup, cleanup);
+
+    // Commit state
+    sourceEl = newThumb;
+    currentIndex = newIndex;
+
+    // Home-grid thumbs carry data-album; update "Go to album" href
+    // so the button always links to the currently-shown cover.
+    if (!isAlbumPage) {
+      const albumSlug = newThumb.dataset.album;
+      if (albumSlug) lbAlbum.href = `/${albumSlug}`;
+    } else {
+      setActiveDot(currentIndex);
+    }
+
+    updateNavState();
+    preloadFullFor(newThumb);
+  }
+
+  function next() {
+    if (currentIndex < thumbs.length - 1) goTo(currentIndex + 1, 'next');
+  }
+  function prev() {
+    if (currentIndex > 0) goTo(currentIndex - 1, 'prev');
   }
 
   function runFlip(from: DOMRect, direction: 'open' | 'close') {
@@ -217,6 +466,9 @@
     lightbox.classList.add('closing');
     lbClose.classList.remove('visible');
     lbAlbum.classList.remove('visible');
+    lbPrev.classList.remove('visible');
+    lbNext.classList.remove('visible');
+    lbDots.classList.remove('visible');
     lightbox.setAttribute('aria-hidden', 'true');
 
     const doClose = () => {
@@ -290,12 +542,24 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen) closeLightbox();
+    if (!isOpen) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') prev();
+    else if (e.key === 'ArrowRight') next();
   });
 
   lbClose.addEventListener('click', (e) => {
     e.stopPropagation();
     closeLightbox();
+  });
+
+  lbPrev.addEventListener('click', (e) => {
+    e.stopPropagation();
+    prev();
+  });
+  lbNext.addEventListener('click', (e) => {
+    e.stopPropagation();
+    next();
   });
 
   // Anchor navigates naturally; no handler needed. Stop propagation so
@@ -314,20 +578,79 @@
     toggleZoom(e.clientX, e.clientY);
   });
 
+  // Touch handling on the lightbox image. We track touchstart → end
+  // once and dispatch based on the gesture shape:
+  //   - horizontal swipe past the threshold → prev / next
+  //   - quick stationary tap within 320ms of another → double-tap zoom
+  //   - everything else → no-op (swallowed so the overlay click
+  //     handler doesn't treat it as a close tap)
+  const SWIPE_THRESHOLD = 50;
+  const SWIPE_MAX_TIME = 600;
+  const DOUBLE_TAP_WINDOW = 320;
+  const DOUBLE_TAP_MOVE_LIMIT = 20;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartT = 0;
+  let touchTracking = false;
   let lastTouch = 0;
+
+  lbImg.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1) {
+        touchTracking = false;
+        return;
+      }
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartT = Date.now();
+      touchTracking = true;
+    },
+    { passive: true }
+  );
+
   lbImg.addEventListener(
     'touchend',
     (e) => {
-      if (e.changedTouches.length === 0) return;
+      if (!touchTracking || e.changedTouches.length === 0) return;
+      touchTracking = false;
+
       const t = e.changedTouches[0];
-      const now = Date.now();
-      if (now - lastTouch < 320) {
-        toggleZoom(t.clientX, t.clientY);
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+      const dt = Date.now() - touchStartT;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      // Horizontal swipe (only when not zoomed — pinch/scroll panning
+      // while zoomed must not be hijacked as navigation).
+      if (
+        !zoomed &&
+        absDx > SWIPE_THRESHOLD &&
+        absDx > absDy * 1.5 &&
+        dt < SWIPE_MAX_TIME
+      ) {
+        if (dx > 0) prev();
+        else next();
         e.preventDefault();
         lastTouch = 0;
         return;
       }
-      lastTouch = now;
+
+      // Double-tap zoom: only counts as a tap if the finger barely
+      // moved. This prevents a short swipe from registering as a tap.
+      if (absDx < DOUBLE_TAP_MOVE_LIMIT && absDy < DOUBLE_TAP_MOVE_LIMIT) {
+        const now = Date.now();
+        if (now - lastTouch < DOUBLE_TAP_WINDOW) {
+          toggleZoom(t.clientX, t.clientY);
+          e.preventDefault();
+          lastTouch = 0;
+          return;
+        }
+        lastTouch = now;
+      }
     },
     { passive: false }
   );
