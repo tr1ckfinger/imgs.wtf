@@ -27,7 +27,26 @@
       "Bash(curl -sLo /tmp/deployed-apple.png https://imgs.wtf/apple-touch-icon.png)",
       "Read(//tmp/**)",
       "Bash(md5 /tmp/deployed-apple.png)",
-      "Bash(md5 public/apple-touch-icon.png)"
+      "Bash(md5 public/apple-touch-icon.png)",
+      "Bash(curl -sL https://frankmorlok.com/ -o /tmp/frank.html)",
+      "Bash(curl -sL https://astro.build/ -o /tmp/astro.html)",
+      "Bash(curl -s /tmp/frank.html)",
+      "Bash(curl -sI https://frankmorlok.com/app/bundle.750ae8182415cb184d34.js)",
+      "Bash(curl -sL https://tailwindcss.com/ -o /tmp/tw.html)",
+      "Bash(curl -sL https://docs.astro.build/en/getting-started/ -o /tmp/astrodoc.html)",
+      "Bash(curl -sL https://www.imgs.wtf/)",
+      "Bash(curl -sL https://frankmorlok.com/app/bundle.750ae8182415cb184d34.js -o /tmp/frank.js)",
+      "Bash(grep -oE \"transition[^;}\\\\\"']{1,200}\" /tmp/frank.js)",
+      "Bash(git revert:*)",
+      "Bash(npx astro *)",
+      "Bash(curl -sL https://imgs.wtf/new-york/ -o /tmp/ny.html)",
+      "Bash(curl -sL \"https://imgs.wtf/_astro/Lightbox.astro_astro_type_script_index_0_lang.CTm1dbHt.js\" -o /tmp/lb.js)",
+      "Bash(curl -sL \"https://imgs.wtf/_astro/cloudinary.DiVdF1rz.css\" -o /tmp/lb.css)",
+      "Bash(grep -oE '\\\\.lb-dots[^{]*\\\\{[^}]{0,300}\\\\}|\\\\.dot\\\\b[^{]{0,30}\\\\{[^}]{0,300}\\\\}' dist/new-york/index.html)",
+      "Bash(node -e 'const s=require\\(\"fs\"\\).readFileSync\\(\"dist/new-york/index.html\",\"utf8\"\\); const rx=/\\\\.\\(lb-dots|dot\\)[^{]*\\\\{[^}]*\\\\}/g; let m; while\\(m=rx.exec\\(s\\)\\) console.log\\(m[0]\\)')",
+      "Bash(node)",
+      "Bash(grep -oE \"\\\\.lb-dots[^{]{1,100}\\\\{[^}]{1,200}\\\\}\" dist/new-york/index.html)",
+      "Bash(npm run *)"
     ]
   }
 }

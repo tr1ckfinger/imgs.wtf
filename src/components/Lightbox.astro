@@ -52,19 +52,19 @@
     padding: 40px;
     /* No backdrop-filter — bg is now solid var(--bg), so there's
        nothing behind to blur. Keeps the lightbox visually identical
-       to the page background it sits over, which is what mobile
-       Safari needed to stop rendering a subtle colour shift. */
-    transition: background 360ms ease;
+       to the page background it sits over.
+       No CSS background transition either: going from display:none to
+       display:flex in the same frame reliably skips CSS transitions
+       (no prior computed style to interpolate from), which is why the
+       backdrop was snapping to opaque while the image was still
+       scaling up. The open/close fade is now driven by a WAAPI
+       opacity animation on the lightbox element itself, in lockstep
+       with the FLIP. */
   }
   .lightbox.open,
   .lightbox.closing {
     display: flex;
-  }
-  .lightbox.open {
     background: var(--lightbox-bg);
-  }
-  .lightbox.closing {
-    background: transparent;
   }
   .lightbox.open.zoomed {
     display: block;
@@ -448,6 +448,11 @@
     lbImg.src = thumb.currentSrc || thumb.src;
 
     const from = thumb.getBoundingClientRect();
+    // Pre-set opacity 0 synchronously so the first painted frame after
+    // display:none -> display:flex is fully transparent. Without this
+    // the grid snaps to covered in a single frame before the WAAPI
+    // fade on the rAF below has a chance to run.
+    lightbox.style.opacity = '0';
     lightbox.classList.add('open');
     lbClose.classList.add('visible');
     updateNavState();
@@ -465,12 +470,85 @@
     lightbox.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
 
-    requestAnimationFrame(() => runFlip(from, 'open'));
+    // Synchronously measure the final lightbox rect and pre-apply the
+    // FLIP "from" transform as an inline style. Without this, the
+    // first painted frame after classList.add('open') shows lbImg at
+    // its full final size — then the WAAPI animation kicks in on the
+    // next rAF and snaps it back to the thumb position. That single
+    // mis-framed paint is what makes the open feel abrupt.
+    // getBoundingClientRect forces layout, so lbImg already has real
+    // dimensions by the time we read it.
+    const toRect = lbImg.getBoundingClientRect();
+    let flipArgs: { dx: number; dy: number; s: number } | null = null;
+    if (toRect.width > 0 && toRect.height > 0) {
+      const dx = from.left + from.width / 2 - (toRect.left + toRect.width / 2);
+      const dy = from.top + from.height / 2 - (toRect.top + toRect.height / 2);
+      const s = from.width / toRect.width;
+      lbImg.style.transformOrigin = '50% 50%';
+      lbImg.style.transform = `translate(${dx}px, ${dy}px) scale(${s})`;
+      flipArgs = { dx, dy, s };
+    }
+
+    requestAnimationFrame(() => {
+      // Fade the entire lightbox (backdrop + image) from 0 -> 1 in
+      // lockstep with the FLIP. The image sits pixel-aligned on top of
+      // the thumb for the first frames, so as the lightbox fades in
+      // the grid behind crossfades out and the tapped image stays
+      // visually full-strength. fill:'forwards' holds opacity:1 after
+      // finish so there's no reassertion of the inline opacity:0 when
+      // the animation ends; cleanup clears the inline and cancels.
+      const bgAnim = lightbox.animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        {
+          duration: OPEN_DURATION,
+          easing: OPEN_EASING,
+          fill: 'forwards',
+        }
+      );
+      const clearBg = () => {
+        lightbox.style.opacity = '';
+        bgAnim.cancel();
+      };
+      bgAnim.finished.then(clearBg, clearBg);
+
+      if (flipArgs) runOpenFlip(flipArgs.dx, flipArgs.dy, flipArgs.s);
+      else runFlip(from, 'open');
+    });
 
     preloadFullFor(thumb);
     warmAdjacent();
 
     isOpen = true;
+  }
+
+  // Open/close timing constants. The open uses an ease-in-out curve
+  // with a noticeably slow start — a pure ease-out covers ~40% of the
+  // scale-up in the first 100ms, which reads as an abrupt pop from the
+  // thumb position. 0.45, 0, 0.15, 1 starts slow and decelerates into
+  // the resting state, which feels like a settle.
+  const OPEN_DURATION = 440;
+  const OPEN_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
+  const CLOSE_DURATION = 280;
+  const CLOSE_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
+
+  // Dedicated open FLIP. fill:'forwards' holds identity after finish
+  // so the inline "from" transform (still on the element) doesn't
+  // snap the image back to the thumb position when the animation's
+  // effect drops. Cleanup clears inline + cancels.
+  function runOpenFlip(dx: number, dy: number, s: number) {
+    const fromKF = { transform: `translate(${dx}px, ${dy}px) scale(${s})` };
+    const toKF = { transform: 'translate(0, 0) scale(1)' };
+    const anim = lbImg.animate([fromKF, toKF], {
+      duration: OPEN_DURATION,
+      easing: OPEN_EASING,
+      fill: 'forwards',
+    });
+    const cleanup = () => {
+      lbImg.style.transform = '';
+      lbImg.style.transformOrigin = '';
+      anim.cancel();
+    };
+    anim.finished.then(cleanup, cleanup);
   }
 
   async function goTo(
@@ -616,10 +694,8 @@
     return lbImg.animate(
       opening ? [fromKF, toKF] : [toKF, fromKF],
       {
-        duration: opening ? 320 : 260,
-        easing: opening
-          ? 'cubic-bezier(0.2, 0.8, 0.2, 1)'
-          : 'cubic-bezier(0.4, 0, 0.2, 1)',
+        duration: opening ? OPEN_DURATION : CLOSE_DURATION,
+        easing: opening ? OPEN_EASING : CLOSE_EASING,
       }
     );
   }
@@ -698,15 +774,40 @@
     }
 
     if (!sourceEl) {
-      setTimeout(doClose, 360);
+      // No thumb to FLIP back to — just fade the lightbox out via WAAPI.
+      // (CSS background transitions are unreliable on display:flex ->
+      // display:none transitions, same reason as the open path.)
+      const bgAnim = lightbox.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
+      );
+      const finish = () => {
+        bgAnim.cancel();
+        doClose();
+      };
+      bgAnim.finished.then(finish, finish);
       return;
     }
 
     requestAnimationFrame(() => {
       const thumbRect = sourceEl!.getBoundingClientRect();
-      const anim = runFlip(thumbRect, 'close');
-      if (anim) anim.onfinish = doClose;
-      else doClose();
+      const imgAnim = runFlip(thumbRect, 'close');
+      // Fade the backdrop alongside the image FLIP. Same trick as
+      // open: CSS bg transitions skip on display flips, so we drive
+      // the fade from JS. Both end together and call doClose once.
+      const bgAnim = lightbox.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
+      );
+      const finish = () => {
+        bgAnim.cancel();
+        doClose();
+      };
+      if (imgAnim) {
+        Promise.all([imgAnim.finished, bgAnim.finished]).then(finish, finish);
+      } else {
+        bgAnim.finished.then(finish, finish);
+      }
     });
   }
 
