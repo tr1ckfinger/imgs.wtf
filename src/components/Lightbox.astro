@@ -44,17 +44,15 @@
     position: fixed;
     top: 0;
     left: 0;
-    /* On iOS Safari with viewport-fit=cover and the floating bottom
-       address bar, inset:0 / 100vh can leave a strip at the bottom
-       that the lightbox doesn't cover — the grid then bleeds through
-       behind the address bar during the fade. 100lvh (large viewport
-       height) is the height when chrome is most collapsed, so the
-       lightbox always extends to the very bottom of the screen
-       regardless of address-bar state. The `vh` line is the fallback
-       for browsers without lvh support. */
+    /* iOS Safari with viewport-fit=cover clips position:fixed elements
+       to the visual viewport (above the floating bottom URL bar) — no
+       CSS unit (100vh, 100lvh, 100dvh) reliably extends the element
+       behind the URL bar / home-indicator safe area. We size the
+       lightbox via JS using documentElement.clientHeight, which IS
+       the full layout viewport including under chrome. Fallback to
+       100vh below for the brief moment before JS runs. */
     width: 100vw;
     height: 100vh;
-    height: 100lvh;
     background: transparent;
     display: none;
     align-items: center;
@@ -62,21 +60,28 @@
     overflow: hidden;
     z-index: 100;
     padding: 40px;
-    /* No backdrop-filter — bg is now solid var(--bg), so there's
-       nothing behind to blur. Keeps the lightbox visually identical
-       to the page background it sits over.
-       No CSS background transition either: going from display:none to
-       display:flex in the same frame reliably skips CSS transitions
-       (no prior computed style to interpolate from), which is why the
-       backdrop was snapping to opaque while the image was still
-       scaling up. The open/close fade is now driven by a WAAPI
-       opacity animation on the lightbox element itself, in lockstep
-       with the FLIP. */
+    /* GPU-promote the lightbox so its content sits on its own
+       compositor layer from the start — no first-open layer
+       creation jank, and the layer is consistently sampled by
+       iOS Safari's URL-bar blur. */
+    transform: translateZ(0);
+    will-change: opacity;
+    /* The lightbox itself is intentionally transparent. Body's --bg
+       equals --lightbox-bg, so when the page chrome (main + header)
+       fades out on open, the user sees the same colour through the
+       transparent lightbox as a solid lightbox bg would have shown.
+       Why not just fade an opaque lightbox bg in over the grid?
+       iOS Safari's URL-bar backdrop blur lazily samples the
+       compositor, with a frame or two of latency per layer. A
+       fade on a position:fixed element shows up under the URL bar
+       a perceptible beat after it shows up elsewhere. Fading the
+       static-position page chrome instead means the chrome's blur
+       sample tracks the page itself — same layer, same timing,
+       no visible lag. */
   }
   .lightbox.open,
   .lightbox.closing {
     display: flex;
-    background: var(--lightbox-bg);
   }
   .lightbox.open.zoomed {
     display: block;
@@ -326,6 +331,54 @@
     document.querySelectorAll<HTMLImageElement>('img.thumb')
   );
 
+  // Move the lightbox tree out of the page layout and onto <body>.
+  // No ancestor's containing block (transform / filter / contain on a
+  // wrapper somewhere) can then affect these position:fixed elements,
+  // which is what we want for a true full-screen overlay.
+  [lightbox, lbClose, lbAlbum, lbPrev, lbNext, lbDots].forEach((el) => {
+    document.body.appendChild(el);
+  });
+
+  // The page chrome we fade in / out alongside the lightbox open
+  // and close animations. The lightbox itself stays transparent —
+  // see the .lightbox CSS comment for the full rationale. Short
+  // version: iOS Safari's URL-bar blur samples each compositor
+  // layer with a frame or two of latency, so a fade on the
+  // position:fixed lightbox lags visibly under the chrome. Fading
+  // the position-static <main> + sticky <header> instead keeps the
+  // sample timing in step. The nav fades too (not just main) so
+  // the now-transparent lightbox doesn't reveal the header text
+  // bleeding through during the open transition.
+  const mainEl = document.querySelector('main') as HTMLElement | null;
+  const navEl = document.querySelector('header.nav') as HTMLElement | null;
+  const fadeTargets = [mainEl, navEl].filter(
+    (el): el is HTMLElement => !!el
+  );
+
+  // iOS Safari with viewport-fit=cover constrains position:fixed
+  // elements to the visual viewport (above the floating bottom URL
+  // bar) when their height is expressed in viewport units — 100vh,
+  // 100lvh, and 100dvh all leave a strip of grid showing through the
+  // translucent URL bar / home-indicator zone. Sizing the lightbox in
+  // explicit pixels from documentElement.clientHeight (the full layout
+  // viewport, including under chrome) covers that area reliably.
+  // window.innerHeight is used as the floor in case clientHeight
+  // collapses on some embedded browsers.
+  function syncLightboxSize() {
+    const h = Math.max(
+      document.documentElement.clientHeight,
+      window.innerHeight
+    );
+    lightbox.style.height = h + 'px';
+  }
+  syncLightboxSize();
+  window.addEventListener('resize', syncLightboxSize);
+  window.addEventListener('orientationchange', syncLightboxSize);
+  // visualViewport.resize fires when iOS shows / hides chrome without
+  // a layout viewport change — keep size in sync there too so a chrome
+  // collapse mid-lightbox doesn't briefly leave a gap at the bottom.
+  window.visualViewport?.addEventListener('resize', syncLightboxSize);
+
   let sourceEl: HTMLImageElement | null = null;
   let currentIndex = -1;
   // Dots only show on album pages. We distinguish them by checking
@@ -460,11 +513,10 @@
     lbImg.src = thumb.currentSrc || thumb.src;
 
     const from = thumb.getBoundingClientRect();
-    // Pre-set opacity 0 synchronously so the first painted frame after
-    // display:none -> display:flex is fully transparent. Without this
-    // the grid snaps to covered in a single frame before the WAAPI
-    // fade on the rAF below has a chance to run.
-    lightbox.style.opacity = '0';
+    // The lightbox is transparent — no pre-set opacity needed. The
+    // page chrome (main + header) is what fades; the lightbox just
+    // toggles display via the .open class so it can host the FLIP'd
+    // image and capture clicks for backdrop-close.
     lightbox.classList.add('open');
     lbClose.classList.add('visible');
     updateNavState();
@@ -502,26 +554,13 @@
     }
 
     requestAnimationFrame(() => {
-      // Fade the entire lightbox (backdrop + image) from 0 -> 1 in
-      // lockstep with the FLIP. The image sits pixel-aligned on top of
-      // the thumb for the first frames, so as the lightbox fades in
-      // the grid behind crossfades out and the tapped image stays
-      // visually full-strength. fill:'forwards' holds opacity:1 after
-      // finish so there's no reassertion of the inline opacity:0 when
-      // the animation ends; cleanup clears the inline and cancels.
-      const bgAnim = lightbox.animate(
-        [{ opacity: 0 }, { opacity: 1 }],
-        {
-          duration: OPEN_DURATION,
-          easing: OPEN_EASING,
-          fill: 'forwards',
-        }
-      );
-      const clearBg = () => {
-        lightbox.style.opacity = '';
-        bgAnim.cancel();
-      };
-      bgAnim.finished.then(clearBg, clearBg);
+      // Fade the page chrome (main + header) out in lockstep with
+      // the FLIP. As they fade, body's --bg (which equals
+      // --lightbox-bg) shows through. After finish, leave inline
+      // opacity:0 in place so they stay hidden until close re-fades
+      // them back in — otherwise they'd pop back visible the instant
+      // fill:'forwards' is released.
+      fadePage(fadeTargets, 'out', OPEN_DURATION, OPEN_EASING);
 
       if (flipArgs) runOpenFlip(flipArgs.dx, flipArgs.dy, flipArgs.s);
       else runFlip(from, 'open');
@@ -712,6 +751,35 @@
     );
   }
 
+  // Helper: animate the listed elements' opacity in or out together.
+  // Direction 'out' = 1 → 0 and pins inline opacity:0 after finish
+  // (so the elements stay hidden while the lightbox is open, after
+  // fill:'forwards' is released). Direction 'in' = 0 → 1 and clears
+  // inline opacity after finish, returning to the stylesheet default.
+  function fadePage(
+    els: HTMLElement[],
+    direction: 'in' | 'out',
+    duration: number,
+    easing: string
+  ) {
+    const out = direction === 'out';
+    const keyframes = out
+      ? [{ opacity: 1 }, { opacity: 0 }]
+      : [{ opacity: 0 }, { opacity: 1 }];
+    els.forEach((el) => {
+      const a = el.animate(keyframes, {
+        duration,
+        easing,
+        fill: 'forwards',
+      });
+      const finalize = () => {
+        el.style.opacity = out ? '0' : '';
+        a.cancel();
+      };
+      a.finished.then(finalize, finalize);
+    });
+  }
+
   function closeLightbox(opts?: { dragDy?: number }) {
     if (!isOpen) return;
     resetZoom();
@@ -746,17 +814,14 @@
     };
 
     // Drag-down dismiss: continue the vertical motion off-screen
-    // instead of FLIPping back to the source thumbnail. The lightbox
-    // backdrop was already partially faded during the drag, so we
-    // animate its opacity down from wherever it is now rather than
-    // letting the CSS background transition snap it back first.
+    // instead of FLIPping back to the source thumbnail. The image
+    // slides + scales + fades on its own, and the page chrome fades
+    // back in over the same window.
     if (opts?.dragDy !== undefined) {
       const vh = window.innerHeight;
       const startTransform =
         lbImg.style.transform || `translateY(${opts.dragDy}px)`;
-      const startLightboxOpacity = lightbox.style.opacity || '1';
       lbImg.style.transition = 'none';
-      lightbox.style.transition = 'none';
       const imgAnim = lbImg.animate(
         [
           { transform: startTransform, opacity: 1 },
@@ -768,57 +833,49 @@
           fill: 'forwards',
         }
       );
-      const lbAnim = lightbox.animate(
-        [{ opacity: startLightboxOpacity }, { opacity: 0 }],
-        {
-          duration: 260,
-          easing: 'cubic-bezier(0.4, 0, 1, 1)',
-          fill: 'forwards',
-        }
-      );
+      // Match the page-chrome fade-in to the dismiss timing so the
+      // grid + nav crossfade back as the image slides off-screen.
+      fadePage(fadeTargets, 'in', 260, 'cubic-bezier(0.4, 0, 1, 1)');
       const finish = () => {
         imgAnim.cancel();
-        lbAnim.cancel();
         doClose();
       };
-      Promise.all([imgAnim.finished, lbAnim.finished]).then(finish, finish);
+      imgAnim.finished.then(finish, finish);
       return;
     }
 
     if (!sourceEl) {
-      // No thumb to FLIP back to — just fade the lightbox out via WAAPI.
-      // (CSS background transitions are unreliable on display:flex ->
-      // display:none transitions, same reason as the open path.)
-      const bgAnim = lightbox.animate(
+      // No thumb to FLIP back to — just fade the page chrome back in
+      // and the image out together. doClose runs once both finish.
+      const imgAnim = lbImg.animate(
         [{ opacity: 1 }, { opacity: 0 }],
         { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
       );
+      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
       const finish = () => {
-        bgAnim.cancel();
+        imgAnim.cancel();
         doClose();
       };
-      bgAnim.finished.then(finish, finish);
+      imgAnim.finished.then(finish, finish);
       return;
     }
 
     requestAnimationFrame(() => {
       const thumbRect = sourceEl!.getBoundingClientRect();
       const imgAnim = runFlip(thumbRect, 'close');
-      // Fade the backdrop alongside the image FLIP. Same trick as
-      // open: CSS bg transitions skip on display flips, so we drive
-      // the fade from JS. Both end together and call doClose once.
-      const bgAnim = lightbox.animate(
-        [{ opacity: 1 }, { opacity: 0 }],
-        { duration: CLOSE_DURATION, easing: CLOSE_EASING, fill: 'forwards' }
-      );
-      const finish = () => {
-        bgAnim.cancel();
-        doClose();
-      };
+      // Crossfade the page chrome back in as the FLIP returns the
+      // image to its thumb position. The thumb itself is in <main>,
+      // so by the time the FLIP lands, the thumb is fully opaque
+      // again underneath.
+      fadePage(fadeTargets, 'in', CLOSE_DURATION, CLOSE_EASING);
       if (imgAnim) {
-        Promise.all([imgAnim.finished, bgAnim.finished]).then(finish, finish);
+        const finish = () => doClose();
+        imgAnim.finished.then(finish, finish);
       } else {
-        bgAnim.finished.then(finish, finish);
+        // No FLIP fired (lbImg had zero size). Defer doClose by the
+        // close duration so the page-chrome fade still has time to
+        // play out before we tear down.
+        setTimeout(doClose, CLOSE_DURATION);
       }
     });
   }
