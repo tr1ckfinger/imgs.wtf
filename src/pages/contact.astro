@@ -6,19 +6,33 @@ import Base from '../layouts/Base.astro';
   <section class="page">
     <h1>cntct</h1>
     <div class="body">
-      <p>[Placeholder — a line or two introducing who you are and what you do.]</p>
-      <p>[Placeholder — what you shoot, what draws you to it, where you're based.]</p>
-      <p>[Placeholder — a closing note: process, gear, ongoing projects, anything worth mentioning.]</p>
+      <img class="portrait" src="/portrait.jpg" alt="Simon Lürwer" />
+      <p>i love photos — which is why i take them</p>
       <dl class="fields">
         <dt>email</dt>
-        <dd><a href="mailto:hello@example.com">hello@example.com</a></dd>
+        <dd><a id="email-link" href="#" rel="noreferrer">simon [at] imgs.wtf</a></dd>
         <dt>instagram</dt>
-        <dd><a href="https://instagram.com/username" target="_blank" rel="noreferrer">@username</a></dd>
+        <dd><a href="https://instagram.com/tr1ckfinger" target="_blank" rel="noreferrer">@tr1ckfinger</a></dd>
         <dt>based in</dt>
-        <dd>[city, country]</dd>
+        <dd>hamburg, germany</dd>
       </dl>
     </div>
   </section>
+
+  <script is:inline>
+    // JS-assembled mailto so the literal `simon@imgs.wtf` never
+    // appears in the page source. Drive-by scrapers that don't run
+    // JS see only the placeholder text "simon [at] imgs.wtf" — most
+    // don't bother to de-obfuscate that, so the address stays off
+    // spam lists. Real users get a working clickable mailto link.
+    (() => {
+      const link = document.getElementById('email-link');
+      if (!link) return;
+      const addr = 'simon' + '@' + 'imgs.wtf';
+      link.href = 'mailto:' + addr;
+      link.textContent = addr;
+    })();
+  </script>
 </Base>
 
 <style>
@@ -28,6 +42,18 @@ import Base from '../layouts/Base.astro';
        prose centers itself here. */
     margin: 0 auto;
     padding: 48px 0 80px;
+  }
+  .portrait {
+    display: block;
+    width: 56px;
+    height: 56px;
+    /* object-fit: cover crops to fill the square regardless of the
+       source image's aspect ratio — no skew, no letterboxing, just
+       a centred crop. The border-radius then turns the square into
+       a circle. */
+    object-fit: cover;
+    border-radius: 50%;
+    margin: 0 0 18px;
   }
   .page h1 {
     font-size: 32px;
