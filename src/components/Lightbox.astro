@@ -371,6 +371,50 @@
     );
     lightbox.style.height = h + 'px';
   }
+  // Pin lbImg to its final on-screen dimensions, computed from the
+  // source thumb's aspect ratio fitted into the padded lightbox area.
+  // Without this, the <img> renders at the loaded resource's natural
+  // pixel size — and our thumb URLs are 1200/1400px wide, smaller
+  // than a typical desktop lightbox area. The image would then "grow"
+  // from natural-size to fit-size only after the higher-res preload
+  // (?w=3200) finishes loading and src swaps, which can take seconds.
+  // With explicit dimensions matching the source aspect, the image
+  // fills its final box from the first paint regardless of which
+  // resolution is currently loaded.
+  function applyFitSize(thumb: HTMLImageElement) {
+    const aw =
+      parseFloat(thumb.getAttribute('width') || '') ||
+      thumb.naturalWidth ||
+      1;
+    const ah =
+      parseFloat(thumb.getAttribute('height') || '') ||
+      thumb.naturalHeight ||
+      1;
+    const cs = getComputedStyle(lightbox);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const padT = parseFloat(cs.paddingTop) || 0;
+    const padB = parseFloat(cs.paddingBottom) || 0;
+    const lbH =
+      parseFloat(lightbox.style.height) || window.innerHeight;
+    const availW = window.innerWidth - padL - padR;
+    const availH = lbH - padT - padB;
+    if (availW <= 0 || availH <= 0) return;
+    const aspect = aw / ah;
+    const availAspect = availW / availH;
+    let w: number, h: number;
+    if (aspect > availAspect) {
+      // Constrained by width — letterbox top/bottom.
+      w = availW;
+      h = availW / aspect;
+    } else {
+      // Constrained by height — letterbox sides.
+      h = availH;
+      w = availH * aspect;
+    }
+    lbImg.style.width = w + 'px';
+    lbImg.style.height = h + 'px';
+  }
   syncLightboxSize();
   window.addEventListener('resize', syncLightboxSize);
   window.addEventListener('orientationchange', syncLightboxSize);
@@ -397,6 +441,19 @@
 
   const ZOOM_FACTOR = 3.5;
   const isTouchDevice = matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+  // Re-fit the lightbox image whenever the viewport changes size, so
+  // landscape vs portrait constraints stay correct as you rotate or
+  // resize. Registered down here (rather than inside syncLightboxSize)
+  // so it doesn't run during the initial syncLightboxSize() call above
+  // — at that point the state lets (isOpen, zoomed, sourceEl) are still
+  // in their TDZ and would throw on access.
+  const refitOnResize = () => {
+    if (isOpen && !zoomed && sourceEl) applyFitSize(sourceEl);
+  };
+  window.addEventListener('resize', refitOnResize);
+  window.addEventListener('orientationchange', refitOnResize);
+  window.visualViewport?.addEventListener('resize', refitOnResize);
 
   function preloadFullFor(thumb: HTMLImageElement) {
     const full = thumb.dataset.full;
@@ -511,6 +568,15 @@
 
     // Use the already-loaded thumbnail src for instant display.
     lbImg.src = thumb.currentSrc || thumb.src;
+
+    // Pin lbImg to its final fit dimensions in pixels BEFORE we measure
+    // the FLIP "to" rect. Without this the <img> sizes itself to its
+    // currently-loaded resource (the 1200/1400-px thumb), which is
+    // smaller than the lightbox area on most desktops — so the image
+    // would render small and only "grow" later, when the higher-res
+    // preload finishes. Applying fit dimensions up front guarantees the
+    // image fills its final box from the very first paint.
+    applyFitSize(thumb);
 
     const from = thumb.getBoundingClientRect();
     // The lightbox is transparent — no pre-set opacity needed. The
@@ -680,6 +746,14 @@
     outgoing.style.zIndex = '150';
     outgoing.style.userSelect = 'none';
     document.body.appendChild(outgoing);
+
+    // Resize lbImg to the new thumb's fit dimensions BEFORE swapping
+    // src. The clone is already absolutely positioned at the old rect
+    // via inline pixel styles, so it's unaffected. Doing this in the
+    // same frame as the src swap means the new image paints at the
+    // correct final size from frame one — no visible "grow" while a
+    // higher-res preload finishes.
+    applyFitSize(newThumb);
 
     // Swap in the newly-decoded image — paints on the very next
     // frame because the decode is already done.
@@ -913,6 +987,12 @@
     lbImg.style.height = '';
     lightbox.scrollTop = 0;
     lightbox.scrollLeft = 0;
+    // Restore the fit dimensions for the source thumb so the image
+    // returns to its baseline size. Without this, clearing width/height
+    // above falls back to the natural pixel size of the currently-loaded
+    // resource — which would make the image appear undersized again
+    // until a higher-res preload swaps in.
+    if (isOpen && sourceEl) applyFitSize(sourceEl);
   }
 
   function zoomIn(x: number, y: number, factor: number = ZOOM_FACTOR) {

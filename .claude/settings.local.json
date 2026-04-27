@@ -46,7 +46,11 @@
       "Bash(node -e 'const s=require\\(\"fs\"\\).readFileSync\\(\"dist/new-york/index.html\",\"utf8\"\\); const rx=/\\\\.\\(lb-dots|dot\\)[^{]*\\\\{[^}]*\\\\}/g; let m; while\\(m=rx.exec\\(s\\)\\) console.log\\(m[0]\\)')",
       "Bash(node)",
       "Bash(grep -oE \"\\\\.lb-dots[^{]{1,100}\\\\{[^}]{1,200}\\\\}\" dist/new-york/index.html)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git rm *)",
+      "Bash(sips -g pixelWidth -g pixelHeight public/portrait.jpg)",
+      "Bash(magick --version)",
+      "Bash(python3 -c \"from PIL import Image; print\\('PIL available'\\)\")"
     ]
   }
 }
