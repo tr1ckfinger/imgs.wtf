@@ -42,7 +42,19 @@
 <style>
   .lightbox {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    /* On iOS Safari with viewport-fit=cover and the floating bottom
+       address bar, inset:0 / 100vh can leave a strip at the bottom
+       that the lightbox doesn't cover — the grid then bleeds through
+       behind the address bar during the fade. 100lvh (large viewport
+       height) is the height when chrome is most collapsed, so the
+       lightbox always extends to the very bottom of the screen
+       regardless of address-bar state. The `vh` line is the fallback
+       for browsers without lvh support. */
+    width: 100vw;
+    height: 100vh;
+    height: 100lvh;
     background: transparent;
     display: none;
     align-items: center;
@@ -521,14 +533,14 @@
     isOpen = true;
   }
 
-  // Open/close timing constants. The open uses an ease-in-out curve
-  // with a noticeably slow start — a pure ease-out covers ~40% of the
-  // scale-up in the first 100ms, which reads as an abrupt pop from the
-  // thumb position. 0.45, 0, 0.15, 1 starts slow and decelerates into
-  // the resting state, which feels like a settle.
-  const OPEN_DURATION = 440;
+  // Open/close timing constants. ease-in-out with a slow start —
+  // a pure ease-out covers ~40% of the scale-up in the first ~30ms,
+  // which reads as an abrupt pop from the thumb position. The S-curve
+  // 0.45, 0, 0.15, 1 starts slow and decelerates into the resting
+  // state, which feels like a settle.
+  const OPEN_DURATION = 320;
   const OPEN_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
-  const CLOSE_DURATION = 280;
+  const CLOSE_DURATION = 220;
   const CLOSE_EASING = 'cubic-bezier(0.45, 0, 0.15, 1)';
 
   // Dedicated open FLIP. fill:'forwards' holds identity after finish
