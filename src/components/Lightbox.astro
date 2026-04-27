@@ -532,6 +532,28 @@
     renderDots();
 
     lightbox.setAttribute('aria-hidden', 'false');
+    // Lock body scroll. Modern browsers (Chromium 94+, Firefox 97+,
+    // Safari 18.2+) honour `scrollbar-gutter: stable` on <html>, which
+    // already reserves the gutter permanently — overflow:hidden then
+    // doesn't shift the layout. For older browsers without that
+    // support, fall back to padding the body by the measured
+    // scrollbar width before the overflow flip.
+    //
+    // Crucially, the JS path must NOT run when scrollbar-gutter is
+    // supported: the gutter is already in place, so adding paddingRight
+    // on top of it double-compensates and shifts the layout the other
+    // way (15px to the left in our case).
+    const scrollbarGutterSupported =
+      typeof CSS !== 'undefined' &&
+      typeof CSS.supports === 'function' &&
+      CSS.supports('scrollbar-gutter', 'stable');
+    if (!scrollbarGutterSupported) {
+      const scrollbarWidth =
+        window.innerWidth - document.documentElement.clientWidth;
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = scrollbarWidth + 'px';
+      }
+    }
     document.body.style.overflow = 'hidden';
 
     // Synchronously measure the final lightbox rect and pre-apply the
@@ -796,6 +818,8 @@
     const doClose = () => {
       lightbox.classList.remove('closing');
       document.body.style.overflow = '';
+      // Clear the scrollbar-compensation pad applied on open.
+      document.body.style.paddingRight = '';
       lbImg.src = '';
       lbImg.style.width = '';
       lbImg.style.height = '';

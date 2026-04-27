@@ -184,6 +184,15 @@ const isContact = path === '/contact';
       * {
         box-sizing: border-box;
       }
+      html {
+        /* Reserve space for the scrollbar gutter even when content
+           doesn't overflow yet — keeps the layout from shifting
+           horizontally when the lightbox toggles `body { overflow:
+           hidden }`. Supported in Chromium 94+, Firefox 97+, Safari
+           18.2+. The Lightbox script also pads the body by the
+           measured scrollbar width as a fallback for older Safari. */
+        scrollbar-gutter: stable;
+      }
       html, body {
         margin: 0;
         padding: 0;
@@ -251,13 +260,15 @@ const isContact = path === '/contact';
         transition: background-color 300ms ease-in-out;
       }
       .nav-inner {
-        max-width: 1400px;
-        margin: 0 auto;
+        /* Full-width nav: the inner row inherits the same horizontal
+           rhythm as <main> so the brand on the left and the links on
+           the right line up with the grid edges. No max-width — the
+           nav stretches the full viewport, padding does the spacing. */
         /* safe-area-inset-top pushes the nav content below the iOS
            notch/status bar now that viewport-fit=cover extends the
            page background all the way to the device edge. Horizontal
            insets cover landscape notches. */
-        padding: calc(20px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) 20px calc(24px + env(safe-area-inset-left));
+        padding: calc(20px + env(safe-area-inset-top)) calc(80px + env(safe-area-inset-right)) 20px calc(80px + env(safe-area-inset-left));
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
@@ -344,9 +355,18 @@ const isContact = path === '/contact';
         transform: scale(1.08);
       }
       main {
-        padding: 0 24px 80px;
-        max-width: 1400px;
-        margin: 0 auto;
+        /* Full-width on desktop with 80px L/R breathing room. No
+           max-width — the grid expands to fill the viewport so the
+           images themselves get bigger, not the count per row. */
+        padding: 0 80px 80px;
+      }
+      @media (max-width: 1100px) {
+        /* Tighten the side rails as the viewport narrows so 80px
+           doesn't eat too much of a smaller screen. */
+        .nav-inner {
+          padding: calc(20px + env(safe-area-inset-top)) calc(40px + env(safe-area-inset-right)) 20px calc(40px + env(safe-area-inset-left));
+        }
+        main { padding: 0 40px 80px; }
       }
       @media (max-width: 640px) {
         /* Let the right column size to its content so the links and
