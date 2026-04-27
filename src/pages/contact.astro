@@ -2,11 +2,13 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="cntct me — imgs.wtf">
+<Base title="cntct — imgs.wtf">
   <section class="page">
-    <h1>cntct me</h1>
+    <h1>cntct</h1>
     <div class="body">
-      <p>[Placeholder — a short invitation to get in touch, for commissions, prints, or just to say hi.]</p>
+      <p>[Placeholder — a line or two introducing who you are and what you do.]</p>
+      <p>[Placeholder — what you shoot, what draws you to it, where you're based.]</p>
+      <p>[Placeholder — a closing note: process, gear, ongoing projects, anything worth mentioning.]</p>
       <dl class="fields">
         <dt>email</dt>
         <dd><a href="mailto:hello@example.com">hello@example.com</a></dd>
@@ -35,7 +37,12 @@ import Base from '../layouts/Base.astro';
     color: var(--fg);
     line-height: 1.65;
     font-size: 16px;
-    margin: 0 0 28px;
+    margin: 0 0 18px;
+  }
+  /* Extra space between the prose and the fields list — the prose
+     introduces, the fields are the actionable bit. */
+  .body p:last-of-type {
+    margin-bottom: 32px;
   }
   .fields {
     display: grid;
@@ -65,7 +72,8 @@ import Base from '../layouts/Base.astro';
   @media (max-width: 640px) {
     .page { padding: 24px 0 56px; }
     .page h1 { font-size: 26px; margin-bottom: 20px; }
-    .body p { font-size: 15px; margin-bottom: 22px; }
+    .body p { font-size: 15px; }
+    .body p:last-of-type { margin-bottom: 24px; }
     .fields { column-gap: 20px; row-gap: 10px; }
     .fields dt { font-size: 13px; }
     .fields dd { font-size: 14px; }
