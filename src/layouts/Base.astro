@@ -70,6 +70,38 @@ const isContact = path === '/contact';
     <main>
       <slot />
     </main>
+    {albumHeader && (
+      <script is:inline>
+        // Album back-arrow: send the user back to whichever listing
+        // they came from (/ or /albums). Default href on the server
+        // is `/` for direct landings / no-JS fallback; here we
+        // override it when document.referrer says they arrived from
+        // /albums. On click we prefer history.back() so scroll
+        // position on the listing is preserved (and any session-
+        // scoped state like the home grid's shuffle stays intact).
+        (() => {
+          const arrow = document.querySelector('.back-arrow');
+          if (!arrow) return;
+          let referrerPath = null;
+          try {
+            if (document.referrer) {
+              const ref = new URL(document.referrer);
+              if (ref.origin === location.origin) {
+                referrerPath = ref.pathname.replace(/\/$/, '') || '/';
+              }
+            }
+          } catch {}
+          if (referrerPath === '/albums') arrow.href = '/albums';
+          else if (referrerPath === '/') arrow.href = '/';
+          arrow.addEventListener('click', (e) => {
+            if (referrerPath && history.length > 1) {
+              e.preventDefault();
+              history.back();
+            }
+          });
+        })();
+      </script>
+    )}
     <script is:inline>
       (() => {
         const setTheme = (t) => {
