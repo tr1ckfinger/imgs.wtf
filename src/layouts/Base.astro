@@ -7,6 +7,7 @@ const { title = 'imgs.wtf', albumHeader } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
 const isHome = path === '/';
+const isAlbums = path === '/albums';
 const isContact = path === '/contact';
 ---
 
@@ -59,6 +60,7 @@ const isContact = path === '/contact';
         <div class="nav-right">
           <nav class="nav-links" aria-label="Primary">
             <a href="/" data-label="imgs" class:list={['nav-link', { active: isHome }]}>imgs</a>
+            <a href="/albums" data-label="albms" class:list={['nav-link', { active: isAlbums }]}>albms</a>
             <a href="/contact" data-label="cntct" class:list={['nav-link', { active: isContact }]}>cntct</a>
           </nav>
           <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
