@@ -28,7 +28,7 @@ const { album } = Astro.props;
         >
           <img
             class="thumb img-fade"
-            src={cldUrl(img.public_id, { w: 1400 })}
+            src={cldUrl(img.public_id, { w: 1800 })}
             data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
             data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
             alt=""
@@ -49,18 +49,20 @@ const { album } = Astro.props;
 </Base>
 
 <style>
-  /* Layout mirrors the home grid (.justified in index.astro) so the
-     home feed and an opened album share the same rhythm and tile
-     size — switching from / into /<album> doesn't read as "different
-     design". */
+  /* On desktop the album view goes "big" — roughly 2× the row height
+     used by the home grid — so once a viewer has committed to a
+     series the images get room to breathe. Tablet / mobile drop back
+     toward the home-grid sizes (190 / 160) so the layout doesn't get
+     unwieldy on small screens. Gap progression matches the home grid
+     (18 → 10 → 6) for visual continuity. */
   .justified {
     padding-top: 8px;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
-    --row-h: 260px;
+    --row-h: 520px;
   }
-  @media (max-width: 1100px) { .justified { --row-h: 220px; } }
+  @media (max-width: 1100px) { .justified { --row-h: 440px; } }
   @media (max-width: 900px) { .justified { --row-h: 190px; gap: 10px; } }
   @media (max-width: 500px) { .justified { --row-h: 160px; gap: 6px; } }
   .justified figure {
