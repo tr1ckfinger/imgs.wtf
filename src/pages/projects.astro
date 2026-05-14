@@ -3,39 +3,37 @@ import Base from '../layouts/Base.astro';
 import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const all = await getAlbums();
-const albums = all.filter((a) => a.category === 'album');
+const projects = all.filter((a) => a.category === 'project');
 ---
 
-<Base title="albms — imgs.wtf">
+<Base title="prjcts — imgs.wtf">
   <section class="grid">
-    {albums.map((album) => (
+    {projects.map((project) => (
       <a
-        href={albumHref(album)}
+        href={albumHref(project)}
         class="card drop-in"
       >
         <img
           class="img-fade"
-          src={cldUrl(album.cover.public_id, { w: 1200, h: 1500, crop: 'fill' })}
-          alt={album.title}
+          src={cldUrl(project.cover.public_id, { w: 1200, h: 1500, crop: 'fill' })}
+          alt={project.title}
           loading="lazy"
         />
-        <span class="title">{album.title}</span>
+        <span class="title">{project.title}</span>
       </a>
     ))}
   </section>
 
-  {albums.length === 0 && (
-    <p class="empty">No albums yet. Upload images to subfolders of Albums/ in Cloudinary.</p>
+  {projects.length === 0 && (
+    <p class="empty">No projects yet. Upload images to subfolders of Projects/ in Cloudinary.</p>
   )}
 </Base>
 
 <style>
-  /* Album listing — same 4-up tile grid the home page used to be,
-     kept here as an alternate way in for visitors who prefer to
-     browse by series rather than scroll the flat all-photos feed. */
-  /* Gaps mirror the home grid (.justified in index.astro) so the two
-     ways into the photos feel like they share a rhythm — switching
-     between /imgs and /albms doesn't read as "different design". */
+  /* Projects listing — same 4-up tile grid as the albums listing, kept
+     identical so the two ways in (series vs themed/commissioned work)
+     share one visual rhythm. Gaps mirror the home grid (.justified in
+     index.astro). */
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

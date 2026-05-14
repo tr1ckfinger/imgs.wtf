@@ -24,11 +24,22 @@ export type CldImage = {
   context?: Record<string, string>;
 };
 
+export type AlbumCategory = 'album' | 'project';
+
 export type Album = {
   slug: string;
   title: string;
+  category: AlbumCategory;
   cover: CldImage;
   images: CldImage[];
+};
+
+// Cloudinary parent folders. Two top-level folders organise the work
+// into albums (personal series) and projects (commissioned / themed
+// work). Each subfolder under one of these parents becomes one Album.
+const PARENT_BY_CATEGORY: Record<AlbumCategory, string> = {
+  album: 'Albums',
+  project: 'Projects',
 };
 
 // Album titles are the raw folder name, lowercased, with spaces and
@@ -45,16 +56,24 @@ function slugFromFolder(folder: string) {
   return folder.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
-async function listFolders(): Promise<string[]> {
-  const res: any = await cloudinary.api.root_folders();
-  return (res.folders ?? []).map((f: any) => f.name);
+async function listSubFolders(parent: string): Promise<string[]> {
+  try {
+    const res: any = await cloudinary.api.sub_folders(parent);
+    return (res.folders ?? []).map((f: any) => f.name);
+  } catch (err: any) {
+    // If a parent folder doesn't exist yet (e.g. the site has albums
+    // but no projects yet) Cloudinary returns 404 — treat as empty so
+    // the build doesn't fail.
+    if (err?.error?.http_code === 404 || err?.http_code === 404) return [];
+    throw err;
+  }
 }
 
-async function listImagesInFolder(folder: string): Promise<CldImage[]> {
-  // Quote the folder name so any spaces in it are parsed as part of
-  // the path segment instead of splitting the search expression.
+async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
+  // Quote the folder path so any spaces in folder names are parsed as
+  // part of the path segment instead of splitting the search expression.
   const res: any = await cloudinary.search
-    .expression(`folder:"${folder}/*"`)
+    .expression(`folder:"${folderPath}/*"`)
     .with_field('tags')
     .with_field('context')
     .sort_by('public_id', 'asc')
@@ -74,24 +93,30 @@ async function listImagesInFolder(folder: string): Promise<CldImage[]> {
 let albumsPromise: Promise<Album[]> | null = null;
 
 async function fetchAlbums(): Promise<Album[]> {
-  const folders = await listFolders();
-  const albums: Album[] = [];
+  const out: Album[] = [];
 
-  for (const folder of folders) {
-    const images = await listImagesInFolder(folder);
-    if (images.length === 0) continue;
+  for (const category of Object.keys(PARENT_BY_CATEGORY) as AlbumCategory[]) {
+    const parent = PARENT_BY_CATEGORY[category];
+    const subs = await listSubFolders(parent);
 
-    const cover = images.find((i) => i.tags?.includes('cover')) ?? images[0];
+    for (const sub of subs) {
+      const folderPath = `${parent}/${sub}`;
+      const images = await listImagesInFolder(folderPath);
+      if (images.length === 0) continue;
 
-    albums.push({
-      slug: slugFromFolder(folder),
-      title: titleFromFolder(folder),
-      cover,
-      images,
-    });
+      const cover = images.find((i) => i.tags?.includes('cover')) ?? images[0];
+
+      out.push({
+        slug: slugFromFolder(sub),
+        title: titleFromFolder(sub),
+        category,
+        cover,
+        images,
+      });
+    }
   }
 
-  return albums;
+  return out;
 }
 
 export async function getAlbums(): Promise<Album[]> {
@@ -102,6 +127,25 @@ export async function getAlbums(): Promise<Album[]> {
     });
   }
   return albumsPromise;
+}
+
+// URL helpers. Routes are namespaced (/albums/<slug>, /projects/<slug>)
+// so a folder named "New York" can exist in both parents without slug
+// collision.
+export function categoryToPath(category: AlbumCategory): 'albums' | 'projects' {
+  return category === 'album' ? 'albums' : 'projects';
+}
+
+export function categoryListingPath(category: AlbumCategory): string {
+  return `/${categoryToPath(category)}`;
+}
+
+export function albumHref(album: Album): string {
+  return `/${categoryToPath(album.category)}/${album.slug}`;
+}
+
+export function albumLabel(album: Album): string {
+  return album.category === 'album' ? 'Go to album' : 'Go to project';
 }
 
 export function cldUrl(

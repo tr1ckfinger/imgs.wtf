@@ -1,7 +1,8 @@
 ---
-// Shared lightbox used by both the home grid and album pages.
-// Opens whenever an img.thumb is clicked. If the thumb carries
-// data-album, a "Go to album" pill is shown alongside the close button.
+// Shared lightbox used by both the home grid and series (album /
+// project) pages. Opens whenever an img.thumb is clicked. If the
+// thumb carries data-album-href, a labelled pill ("Go to album" or
+// "Go to project") is shown alongside the close button.
 ---
 
 <div id="lightbox" class="lightbox" aria-hidden="true">
@@ -425,9 +426,10 @@
 
   let sourceEl: HTMLImageElement | null = null;
   let currentIndex = -1;
-  // Dots only show on album pages. We distinguish them by checking
-  // whether the clicked thumb carries data-album: home-grid thumbs do
-  // (each represents an album), album-grid thumbs don't.
+  // Dots only show on series (album / project) pages. We distinguish
+  // them by checking whether the clicked thumb carries data-album-href:
+  // home-grid thumbs do (each represents a series), series-page thumbs
+  // don't.
   let isAlbumPage = false;
   let isOpen = false;
   let zoomed = false;
@@ -556,7 +558,7 @@
     if (isOpen) return;
     sourceEl = thumb;
     currentIndex = thumbs.indexOf(thumb);
-    isAlbumPage = !thumb.dataset.album;
+    isAlbumPage = !thumb.dataset.albumHref;
 
     // Clear any lingering transform / transition state from a
     // previous slide or pinch so the FLIP open animation starts from
@@ -587,9 +589,14 @@
     lbClose.classList.add('visible');
     updateNavState();
 
-    const albumSlug = thumb.dataset.album;
-    if (albumSlug) {
-      lbAlbum.href = `/${albumSlug}`;
+    const href = thumb.dataset.albumHref;
+    const label = thumb.dataset.albumLabel;
+    if (href) {
+      lbAlbum.href = href;
+      // Label is "Go to album" or "Go to project" depending on which
+      // parent folder the image lives under — set server-side in
+      // index.astro so the pill matches the destination type.
+      if (label) lbAlbum.textContent = label;
       lbAlbum.classList.add('visible');
     } else {
       lbAlbum.classList.remove('visible');
@@ -803,11 +810,14 @@
     sourceEl = newThumb;
     currentIndex = newIndex;
 
-    // Home-grid thumbs carry data-album; update "Go to album" href
-    // so the button always links to the currently-shown cover.
+    // Home-grid thumbs carry data-album-href; update the pill's href
+    // and label so the button always links to the currently-shown
+    // image's parent series.
     if (!isAlbumPage) {
-      const albumSlug = newThumb.dataset.album;
-      if (albumSlug) lbAlbum.href = `/${albumSlug}`;
+      const href = newThumb.dataset.albumHref;
+      const label = newThumb.dataset.albumLabel;
+      if (href) lbAlbum.href = href;
+      if (label) lbAlbum.textContent = label;
     } else {
       // Update dot state — classes only, no DOM churn. CSS transitions
       // animate sizes and opacity as the window and active shift.

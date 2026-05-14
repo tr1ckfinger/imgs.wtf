@@ -1,22 +1,36 @@
 ---
-import Base from '../layouts/Base.astro';
-import Lightbox from '../components/Lightbox.astro';
-import { getAlbums, cldUrl } from '../lib/cloudinary';
+import Base from '../../layouts/Base.astro';
+import Lightbox from '../../components/Lightbox.astro';
+import {
+  getAlbums,
+  cldUrl,
+  categoryToPath,
+  categoryListingPath,
+} from '../../lib/cloudinary';
 
 export async function getStaticPaths() {
   const albums = await getAlbums();
   return albums.map((album) => ({
-    params: { album: album.slug },
+    params: {
+      category: categoryToPath(album.category),
+      slug: album.slug,
+    },
     props: { album },
   }));
 }
 
 const { album } = Astro.props;
+
+// Default back destination is the category's listing page. The back-
+// arrow script in Base.astro overrides this client-side when the user
+// arrived from the flat home grid (/) instead — so this is just the
+// sensible fallback for direct loads / shared links.
+const backHref = categoryListingPath(album.category);
 ---
 
 <Base
   title={`${album.title} — imgs.wtf`}
-  albumHeader={{ title: album.title, backHref: '/', count: album.images.length }}
+  albumHeader={{ title: album.title, backHref, count: album.images.length }}
 >
   <section class="justified">
     {album.images.map((img) => {
@@ -49,8 +63,8 @@ const { album } = Astro.props;
 </Base>
 
 <style>
-  /* On desktop the album view goes "big" — roughly 2× the row height
-     used by the home grid — so once a viewer has committed to a
+  /* On desktop the single-series view goes "big" — roughly 2× the row
+     height used by the home grid — so once a viewer has committed to a
      series the images get room to breathe. Tablet / mobile drop back
      toward the home-grid sizes (190 / 160) so the layout doesn't get
      unwieldy on small screens. Gap progression matches the home grid
