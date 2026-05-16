@@ -38,7 +38,8 @@ const backHref = categoryListingPath(album.category);
       return (
         <figure
           class="drop-in"
-          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
+          style={`--aspect: ${aspect};`}
+          data-aspect={aspect}
         >
           <img
             class="thumb img-fade"
@@ -53,13 +54,136 @@ const backHref = categoryListingPath(album.category);
         </figure>
       );
     })}
-    <i class="filler"></i>
-    <i class="filler"></i>
-    <i class="filler"></i>
-    <i class="filler"></i>
   </section>
 
   <Lightbox />
+
+  <script is:inline>
+    // JS-driven justified layout — picks row breakpoints globally to
+    // minimise the variance of row heights around --row-h. Greedy
+    // packing (commit-when-next-item-would-overflow) doesn't work when
+    // image aspects vary: rows end up with mismatched aspect-sums, and
+    // since each row scales to fit container width, mismatched sums →
+    // mismatched heights. A 2-person shot in row 1 mixed with single
+    // portraits in row 2 was producing rows that differed by ~20% in
+    // height.
+    //
+    // The fix is dynamic programming: for every possible partition of
+    // the image list into rows, compute the total cost (sum of
+    // (h_row − targetH)²), and pick the partition that minimises it.
+    // O(n²) but n is tiny (typically <100 per album), runs in well
+    // under a millisecond.
+    //
+    // The last row stays at --row-h (free cost) so a sparse trailing
+    // row doesn't balloon — it sits ragged on the right, which reads
+    // as intentional rather than broken.
+    //
+    // CSS fallback (no JS / pre-JS render): figures sized to
+    // width = aspect × --row-h, height = --row-h — uniform height,
+    // ragged right. The flash is imperceptible because the script is
+    // parsed inline right after the section's figures.
+    (() => {
+      const container = document.querySelector('.justified');
+      if (!container) return;
+
+      function layout() {
+        const cs = getComputedStyle(container);
+        const targetH = parseFloat(cs.getPropertyValue('--row-h')) || 260;
+        const gap = parseFloat(cs.gap) || 18;
+        const containerW = container.clientWidth;
+        const figs = container.querySelectorAll('figure');
+
+        // Read phase — collect aspects.
+        const items = [];
+        figs.forEach((f) => {
+          const a = parseFloat(f.dataset.aspect);
+          if (!Number.isFinite(a) || a <= 0) return;
+          items.push({ el: f, aspect: a });
+        });
+        const n = items.length;
+        if (!n) return;
+
+        // dp[i] = minimum total cost to lay out items[i..n).
+        // next[i] = exclusive end index of the row that starts at i,
+        //           in the optimal partition.
+        const dp = new Array(n + 1).fill(Infinity);
+        const next = new Array(n + 1).fill(-1);
+        dp[n] = 0;
+
+        // Backward DP. Every row — including the last — pays cost
+        // (h_scaled − targetH)². No "sparse last row" exemption: an
+        // earlier version exempted the last row when its scaled height
+        // exceeded a cap, but DP exploited this by deliberately making
+        // the last row sparse (e.g. picking 7+3 over 5+5 because the
+        // 3-item tail got the exemption and contributed zero cost).
+        // Charging every row uniformly forces the DP to pick the
+        // partition where rows are most-equally close to target — which
+        // for 10 portrait-ish images on a wide desktop is 5+5, both
+        // rows scaling uniformly to fill width.
+        //
+        // Trade-off: for an item count that doesn't divide evenly into
+        // rows (e.g. 11), the DP picks a near-balanced split like 5+6
+        // rather than 5+5+1, accepting some height mismatch instead of
+        // a lonely trailing image. That reads as "intentional" rather
+        // than "broken layout".
+        for (let i = n - 1; i >= 0; i--) {
+          let aspectSum = 0;
+          for (let j = i; j < n; j++) {
+            aspectSum += items[j].aspect;
+            const numItems = j - i + 1;
+            const gaps = (numItems - 1) * gap;
+            const hScaled = (containerW - gaps) / aspectSum;
+
+            const delta = hScaled - targetH;
+            let cost = delta * delta;
+            // Heavy penalty for rows that would have to stretch or
+            // shrink to extreme heights — DP avoids them unless
+            // there's no alternative (e.g. an album with one image).
+            if (hScaled > targetH * 3) cost += 1e9;
+            if (hScaled < targetH * 0.3) cost += 1e9;
+
+            const total = cost + dp[j + 1];
+            if (total < dp[i]) {
+              dp[i] = total;
+              next[i] = j + 1;
+            }
+          }
+        }
+
+        // Reconstruct the optimal partition.
+        const rows = [];
+        let i = 0;
+        while (i < n) {
+          const j = next[i];
+          rows.push({ items: items.slice(i, j) });
+          i = j;
+        }
+
+        // Write phase — every row scales to fit container width.
+        for (const r of rows) {
+          const sumA = r.items.reduce((s, it) => s + it.aspect, 0);
+          const gaps = (r.items.length - 1) * gap;
+          const h = (containerW - gaps) / sumA;
+          for (const item of r.items) {
+            item.el.style.width = (item.aspect * h) + 'px';
+            item.el.style.height = h + 'px';
+          }
+        }
+      }
+
+      // Initial pass — figures are in the DOM by the time this script
+      // is parsed (it sits after the section).
+      layout();
+
+      // Re-layout on viewport changes. requestAnimationFrame coalesces
+      // a burst of resize events into one layout pass per frame.
+      let raf = 0;
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(layout);
+      });
+    })();
+  </script>
 </Base>
 
 <style>
@@ -68,7 +192,13 @@ const backHref = categoryListingPath(album.category);
      series the images get room to breathe. Tablet / mobile drop back
      toward the home-grid sizes (190 / 160) so the layout doesn't get
      unwieldy on small screens. Gap progression matches the home grid
-     (18 → 10 → 6) for visual continuity. */
+     (18 → 10 → 6) for visual continuity.
+
+     The actual row geometry is set by the inline justified-layout JS
+     below (which writes width/height in pixels onto each figure to make
+     every row exactly fill the container). These CSS values are the
+     fallback shown for the imperceptible window between parse and
+     script execution, plus the no-JS state. */
   .justified {
     padding-top: 8px;
     display: flex;
@@ -84,7 +214,13 @@ const backHref = categoryListingPath(album.category);
     overflow: hidden;
     border-radius: 3px;
     background: var(--card-bg);
-    min-width: 0;
+    /* Pre-JS fallback dimensions: uniform height, ragged right edge.
+       The JS layout below overrides width/height in pixels, but if
+       JS is disabled or hasn't run yet, this gives a reasonable
+       layout instead of zero-sized boxes. */
+    width: calc(var(--aspect) * var(--row-h));
+    height: var(--row-h);
+    flex-shrink: 0;
   }
   .justified figure img {
     width: 100%;
@@ -96,12 +232,5 @@ const backHref = categoryListingPath(album.category);
   }
   .justified figure img:hover {
     filter: brightness(var(--img-hover));
-  }
-  /* Phantom fillers so the last row keeps natural sizing instead of stretching. */
-  .justified .filler {
-    flex-grow: 1000000000;
-    flex-basis: 0;
-    content: '';
-    height: 0;
   }
 </style>
