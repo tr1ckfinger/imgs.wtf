@@ -88,10 +88,23 @@ const backHref = categoryListingPath(album.category);
 
       function layout() {
         const cs = getComputedStyle(container);
+        const figs = container.querySelectorAll('figure');
+
+        // On narrow viewports the container switches to a CSS grid via
+        // media query (see styles below) — uniform cells, no JS-driven
+        // sizing needed. Clear any inline width/height set on a prior
+        // (wider) layout pass so the CSS grid takes over cleanly.
+        if (cs.display === 'grid') {
+          figs.forEach((f) => {
+            f.style.width = '';
+            f.style.height = '';
+          });
+          return;
+        }
+
         const targetH = parseFloat(cs.getPropertyValue('--row-h')) || 260;
         const gap = parseFloat(cs.gap) || 18;
         const containerW = container.clientWidth;
-        const figs = container.querySelectorAll('figure');
 
         // Read phase — collect aspects.
         const items = [];
@@ -208,7 +221,6 @@ const backHref = categoryListingPath(album.category);
   }
   @media (max-width: 1100px) { .justified { --row-h: 440px; } }
   @media (max-width: 900px) { .justified { --row-h: 190px; gap: 10px; } }
-  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 6px; } }
   .justified figure {
     margin: 0;
     overflow: hidden;
@@ -232,5 +244,26 @@ const backHref = categoryListingPath(album.category);
   }
   .justified figure img:hover {
     filter: brightness(var(--img-hover));
+  }
+  /* Phone viewports: the justified layout struggles to find a row
+     partition with uniform heights at this narrow width (a 10-image
+     album would land on 4+3+3 with the 4-row visibly shorter than the
+     others). Switch to a 3-column grid with portrait-shaped (3/4)
+     cells — perfect fit for portraits, slight cover-crop on landscapes
+     / 2-person shots. The JS layout pass detects this via
+     getComputedStyle(container).display and bails out, letting the
+     grid take over. */
+  @media (max-width: 500px) {
+    .justified {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .justified figure {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 3 / 4;
+      flex-shrink: initial;
+    }
   }
 </style>
