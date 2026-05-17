@@ -116,71 +116,63 @@ const backHref = categoryListingPath(album.category);
         const n = items.length;
         if (!n) return;
 
-        // dp[i] = minimum total cost to lay out items[i..n).
-        // next[i] = exclusive end index of the row that starts at i,
-        //           in the optimal partition.
-        const dp = new Array(n + 1).fill(Infinity);
-        const next = new Array(n + 1).fill(-1);
-        dp[n] = 0;
-
-        // Backward DP. Every row — including the last — pays cost
-        // (h_scaled − targetH)². No "sparse last row" exemption: an
-        // earlier version exempted the last row when its scaled height
-        // exceeded a cap, but DP exploited this by deliberately making
-        // the last row sparse (e.g. picking 7+3 over 5+5 because the
-        // 3-item tail got the exemption and contributed zero cost).
-        // Charging every row uniformly forces the DP to pick the
-        // partition where rows are most-equally close to target — which
-        // for 10 portrait-ish images on a wide desktop is 5+5, both
-        // rows scaling uniformly to fill width.
+        // Fixed items-per-row, single uniform height across the entire
+        // grid. Earlier DP-per-row approaches minimised each row's
+        // deviation from target, which let the DP pick uneven splits
+        // like 4+3+3 (with row 1 visibly shorter than rows 2 & 3)
+        // because the total "distance from target" was smaller than a
+        // uniform 5+5 where every row was equally below target.
+        // Uniformity matters more than target-proximity here.
         //
-        // Trade-off: for an item count that doesn't divide evenly into
-        // rows (e.g. 11), the DP picks a near-balanced split like 5+6
-        // rather than 5+5+1, accepting some height mismatch instead of
-        // a lonely trailing image. That reads as "intentional" rather
-        // than "broken layout".
-        for (let i = n - 1; i >= 0; i--) {
-          let aspectSum = 0;
-          for (let j = i; j < n; j++) {
-            aspectSum += items[j].aspect;
-            const numItems = j - i + 1;
-            const gaps = (numItems - 1) * gap;
-            const hScaled = (containerW - gaps) / aspectSum;
+        // Algorithm: pick the items-per-row count N that minimises
+        // |row_height(N) − targetH| + α · remainder, where α weights
+        // the cost of leaving a sparse trailing row (last row with
+        // fewer than N items). Then apply that one height to every
+        // figure. Flex-wrap distributes items into rows — for uniform
+        // aspects (the common case for a portrait series like
+        // strangers/france) exactly N per row; for mixed aspects,
+        // approximately N, with the last row possibly sparse. Heights
+        // are uniform by construction, no exceptions.
+        const avgAspect = items.reduce((s, it) => s + it.aspect, 0) / n;
+        const REMAINDER_PENALTY = 100;
 
-            const delta = hScaled - targetH;
-            let cost = delta * delta;
-            // Heavy penalty for rows that would have to stretch or
-            // shrink to extreme heights — DP avoids them unless
-            // there's no alternative (e.g. an album with one image).
-            if (hScaled > targetH * 3) cost += 1e9;
-            if (hScaled < targetH * 0.3) cost += 1e9;
+        // Subpixel-rounding safety margin: the browser rounds each
+        // item's pixel width up when laying out, so a row sized to fit
+        // container width exactly can overshoot by a couple of pixels
+        // and the last item wraps to a new line. Reserving a few
+        // pixels at the right edge gives the rounding room to land
+        // without bumping items. 4px is well below visible noise at
+        // photo-grid scales, but absorbs ~1px per item for rows of up
+        // to 4-5 items, which is the realistic range.
+        const FIT_MARGIN = 4;
+        const usableW = containerW - FIT_MARGIN;
 
-            const total = cost + dp[j + 1];
-            if (total < dp[i]) {
-              dp[i] = total;
-              next[i] = j + 1;
-            }
+        let bestN = 1;
+        let bestCost = Infinity;
+        for (let N = 1; N <= n; N++) {
+          const h = (usableW - (N - 1) * gap) / (N * avgAspect);
+          if (h <= 0) continue;
+          // Skip Ns whose row height would be wildly off target — they
+          // produce unreadably-small or absurdly-tall grids.
+          if (h < targetH * 0.3 || h > targetH * 3) continue;
+          const remainder = n % N;
+          const cost = Math.abs(h - targetH) + REMAINDER_PENALTY * remainder;
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestN = N;
           }
         }
 
-        // Reconstruct the optimal partition.
-        const rows = [];
-        let i = 0;
-        while (i < n) {
-          const j = next[i];
-          rows.push({ items: items.slice(i, j) });
-          i = j;
-        }
+        // One height for every figure, derived from filling container
+        // width (minus the safety margin) with N items at average
+        // aspect. For uniform aspects this is exact (modulo the 4px
+        // margin); for mixed aspects it's a close approximation.
+        const uniformH =
+          (usableW - (bestN - 1) * gap) / (bestN * avgAspect);
 
-        // Write phase — every row scales to fit container width.
-        for (const r of rows) {
-          const sumA = r.items.reduce((s, it) => s + it.aspect, 0);
-          const gaps = (r.items.length - 1) * gap;
-          const h = (containerW - gaps) / sumA;
-          for (const item of r.items) {
-            item.el.style.width = (item.aspect * h) + 'px';
-            item.el.style.height = h + 'px';
-          }
+        for (const item of items) {
+          item.el.style.width = (item.aspect * uniformH) + 'px';
+          item.el.style.height = uniformH + 'px';
         }
       }
 
