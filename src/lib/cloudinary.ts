@@ -72,11 +72,15 @@ async function listSubFolders(parent: string): Promise<string[]> {
 async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
   // Quote the folder path so any spaces in folder names are parsed as
   // part of the path segment instead of splitting the search expression.
+  // Sort newest-first by upload time: photos within a series appear
+  // with the most recent shoot at the top, and as new images are added
+  // to a folder they show up first on the page instead of getting
+  // buried at the bottom.
   const res: any = await cloudinary.search
     .expression(`folder:"${folderPath}/*"`)
     .with_field('tags')
     .with_field('context')
-    .sort_by('public_id', 'asc')
+    .sort_by('uploaded_at', 'desc')
     .max_results(500)
     .execute();
 
