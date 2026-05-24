@@ -38,12 +38,11 @@ const backHref = categoryListingPath(album.category);
       return (
         <figure
           class="drop-in"
-          style={`--aspect: ${aspect};`}
-          data-aspect={aspect}
+          style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
         >
           <img
             class="thumb img-fade"
-            src={cldUrl(img.public_id, { w: 1800 })}
+            src={cldUrl(img.public_id, { w: 1600 })}
             data-full={cldUrl(img.public_id, { w: 3200, q: 'auto:best' })}
             data-zoom={cldUrl(img.public_id, { q: 'auto:best' })}
             alt=""
@@ -54,177 +53,38 @@ const backHref = categoryListingPath(album.category);
         </figure>
       );
     })}
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
+    <i class="filler"></i>
   </section>
 
   <Lightbox />
-
-  <script is:inline>
-    // JS-driven justified layout — picks row breakpoints globally to
-    // minimise the variance of row heights around --row-h. Greedy
-    // packing (commit-when-next-item-would-overflow) doesn't work when
-    // image aspects vary: rows end up with mismatched aspect-sums, and
-    // since each row scales to fit container width, mismatched sums →
-    // mismatched heights. A 2-person shot in row 1 mixed with single
-    // portraits in row 2 was producing rows that differed by ~20% in
-    // height.
-    //
-    // The fix is dynamic programming: for every possible partition of
-    // the image list into rows, compute the total cost (sum of
-    // (h_row − targetH)²), and pick the partition that minimises it.
-    // O(n²) but n is tiny (typically <100 per album), runs in well
-    // under a millisecond.
-    //
-    // The last row stays at --row-h (free cost) so a sparse trailing
-    // row doesn't balloon — it sits ragged on the right, which reads
-    // as intentional rather than broken.
-    //
-    // CSS fallback (no JS / pre-JS render): figures sized to
-    // width = aspect × --row-h, height = --row-h — uniform height,
-    // ragged right. The flash is imperceptible because the script is
-    // parsed inline right after the section's figures.
-    (() => {
-      const container = document.querySelector('.justified');
-      if (!container) return;
-
-      function layout() {
-        const cs = getComputedStyle(container);
-        const figs = container.querySelectorAll('figure');
-
-        // On narrow viewports the container switches to a CSS grid via
-        // media query (see styles below) — uniform cells, no JS-driven
-        // sizing needed. Clear any inline width/height set on a prior
-        // (wider) layout pass so the CSS grid takes over cleanly.
-        if (cs.display === 'grid') {
-          figs.forEach((f) => {
-            f.style.width = '';
-            f.style.height = '';
-          });
-          return;
-        }
-
-        const targetH = parseFloat(cs.getPropertyValue('--row-h')) || 260;
-        const gap = parseFloat(cs.gap) || 18;
-        const containerW = container.clientWidth;
-
-        // Read phase — collect aspects.
-        const items = [];
-        figs.forEach((f) => {
-          const a = parseFloat(f.dataset.aspect);
-          if (!Number.isFinite(a) || a <= 0) return;
-          items.push({ el: f, aspect: a });
-        });
-        const n = items.length;
-        if (!n) return;
-
-        // Fixed items-per-row, single uniform height across the entire
-        // grid. Earlier DP-per-row approaches minimised each row's
-        // deviation from target, which let the DP pick uneven splits
-        // like 4+3+3 (with row 1 visibly shorter than rows 2 & 3)
-        // because the total "distance from target" was smaller than a
-        // uniform 5+5 where every row was equally below target.
-        // Uniformity matters more than target-proximity here.
-        //
-        // Algorithm: pick the items-per-row count N that minimises
-        // |row_height(N) − targetH| + α · remainder, where α weights
-        // the cost of leaving a sparse trailing row (last row with
-        // fewer than N items). Then apply that one height to every
-        // figure. Flex-wrap distributes items into rows — for uniform
-        // aspects (the common case for a portrait series like
-        // strangers/france) exactly N per row; for mixed aspects,
-        // approximately N, with the last row possibly sparse. Heights
-        // are uniform by construction, no exceptions.
-        const avgAspect = items.reduce((s, it) => s + it.aspect, 0) / n;
-        const REMAINDER_PENALTY = 100;
-
-        // Subpixel-rounding safety margin: the browser rounds each
-        // item's pixel width up when laying out, so a row sized to fit
-        // container width exactly can overshoot by a couple of pixels
-        // and the last item wraps to a new line. Reserving a few
-        // pixels at the right edge gives the rounding room to land
-        // without bumping items. 4px is well below visible noise at
-        // photo-grid scales, but absorbs ~1px per item for rows of up
-        // to 4-5 items, which is the realistic range.
-        const FIT_MARGIN = 4;
-        const usableW = containerW - FIT_MARGIN;
-
-        let bestN = 1;
-        let bestCost = Infinity;
-        for (let N = 1; N <= n; N++) {
-          const h = (usableW - (N - 1) * gap) / (N * avgAspect);
-          if (h <= 0) continue;
-          // Skip Ns whose row height would be wildly off target — they
-          // produce unreadably-small or absurdly-tall grids.
-          if (h < targetH * 0.3 || h > targetH * 3) continue;
-          const remainder = n % N;
-          const cost = Math.abs(h - targetH) + REMAINDER_PENALTY * remainder;
-          if (cost < bestCost) {
-            bestCost = cost;
-            bestN = N;
-          }
-        }
-
-        // One height for every figure, derived from filling container
-        // width (minus the safety margin) with N items at average
-        // aspect. For uniform aspects this is exact (modulo the 4px
-        // margin); for mixed aspects it's a close approximation.
-        const uniformH =
-          (usableW - (bestN - 1) * gap) / (bestN * avgAspect);
-
-        for (const item of items) {
-          item.el.style.width = (item.aspect * uniformH) + 'px';
-          item.el.style.height = uniformH + 'px';
-        }
-      }
-
-      // Initial pass — figures are in the DOM by the time this script
-      // is parsed (it sits after the section).
-      layout();
-
-      // Re-layout on viewport changes. requestAnimationFrame coalesces
-      // a burst of resize events into one layout pass per frame.
-      let raf = 0;
-      window.addEventListener('resize', () => {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(layout);
-      });
-    })();
-  </script>
 </Base>
 
 <style>
-  /* On desktop the single-series view goes "big" — roughly 2× the row
-     height used by the home grid — so once a viewer has committed to a
-     series the images get room to breathe. Tablet / mobile drop back
-     toward the home-grid sizes (190 / 160) so the layout doesn't get
-     unwieldy on small screens. Gap progression matches the home grid
-     (18 → 10 → 6) for visual continuity.
-
-     The actual row geometry is set by the inline justified-layout JS
-     below (which writes width/height in pixels onto each figure to make
-     every row exactly fill the container). These CSS values are the
-     fallback shown for the imperceptible window between parse and
-     script execution, plus the no-JS state. */
+  /* Justified flex layout, identical to the home grid (index.astro) so
+     the home feed and the inside-series pages share one rhythm —
+     switching from / into /<category>/<slug> doesn't read as
+     "different design". Each figure expands by its aspect ratio to
+     fill the row width; phantom .filler elements at the end keep the
+     last row from stretching when it has fewer items than a full row. */
   .justified {
     padding-top: 8px;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
-    --row-h: 520px;
+    --row-h: 260px;
   }
-  @media (max-width: 1100px) { .justified { --row-h: 440px; } }
+  @media (max-width: 1100px) { .justified { --row-h: 220px; } }
   @media (max-width: 900px) { .justified { --row-h: 190px; gap: 10px; } }
+  @media (max-width: 500px) { .justified { --row-h: 160px; gap: 6px; } }
   .justified figure {
     margin: 0;
     overflow: hidden;
     border-radius: 3px;
     background: var(--card-bg);
-    /* Pre-JS fallback dimensions: uniform height, ragged right edge.
-       The JS layout below overrides width/height in pixels, but if
-       JS is disabled or hasn't run yet, this gives a reasonable
-       layout instead of zero-sized boxes. */
-    width: calc(var(--aspect) * var(--row-h));
-    height: var(--row-h);
-    flex-shrink: 0;
+    min-width: 0;
   }
   .justified figure img {
     width: 100%;
@@ -237,25 +97,12 @@ const backHref = categoryListingPath(album.category);
   .justified figure img:hover {
     filter: brightness(var(--img-hover));
   }
-  /* Phone viewports: the justified layout struggles to find a row
-     partition with uniform heights at this narrow width (a 10-image
-     album would land on 4+3+3 with the 4-row visibly shorter than the
-     others). Switch to a 3-column grid with portrait-shaped (3/4)
-     cells — perfect fit for portraits, slight cover-crop on landscapes
-     / 2-person shots. The JS layout pass detects this via
-     getComputedStyle(container).display and bails out, letting the
-     grid take over. */
-  @media (max-width: 500px) {
-    .justified {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-    .justified figure {
-      width: 100%;
-      height: auto;
-      aspect-ratio: 3 / 4;
-      flex-shrink: initial;
-    }
+  /* Phantom fillers absorb leftover slack on the last row so the row
+     keeps natural sizing instead of stretching its items to fill width. */
+  .justified .filler {
+    flex-grow: 1000000000;
+    flex-basis: 0;
+    content: '';
+    height: 0;
   }
 </style>
