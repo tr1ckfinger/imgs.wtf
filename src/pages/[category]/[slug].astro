@@ -37,7 +37,7 @@ const backHref = categoryListingPath(album.category);
       const aspect = img.width / img.height;
       return (
         <figure
-          class="drop-in"
+          class:list={['drop-in', { landscape: aspect > 1 }]}
           style={`--aspect: ${aspect}; flex-grow: ${aspect}; flex-basis: calc(${aspect} * var(--row-h)); aspect-ratio: ${aspect};`}
         >
           <img
@@ -104,5 +104,33 @@ const backHref = categoryListingPath(album.category);
     flex-basis: 0;
     content: '';
     height: 0;
+  }
+  /* On mobile the flex justified layout's "last row stays at basis
+     while other rows stretch" trick makes orphan items visibly smaller
+     than the rows above. Swap in a 2-column CSS grid: every cell shares
+     one column width, so orphans on the last row match the cells above.
+     aspect-ratio: var(--aspect) keeps each image's true aspect, so
+     landscapes stay landscape instead of getting cover-cropped to 3:4
+     (the reason an earlier hardcoded `aspect-ratio: 3/4` grid was
+     replaced). Hide the phantom fillers — grid auto-places real items
+     into cells and the fillers would just take up dead cells.
+     Landscape items (aspect > 1) span both columns so they get the
+     full row width instead of sitting awkwardly in a half-column with
+     a tall empty gap beside them. */
+  @media (max-width: 500px) {
+    .justified {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+    .justified .filler { display: none; }
+    .justified figure {
+      width: 100%;
+      height: auto;
+      aspect-ratio: var(--aspect);
+    }
+    .justified figure.landscape {
+      grid-column: span 2;
+    }
   }
 </style>
