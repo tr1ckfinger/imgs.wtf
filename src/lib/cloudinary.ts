@@ -20,6 +20,7 @@ export type CldImage = {
   width: number;
   height: number;
   format: string;
+  uploaded_at?: string; // ISO datetime from Cloudinary
   tags?: string[];
   context?: Record<string, string>;
 };
@@ -32,6 +33,9 @@ export type Album = {
   category: AlbumCategory;
   cover: CldImage;
   images: CldImage[];
+  // ISO datetime of the most recently uploaded image in this album.
+  // Used to sort albums newest-first on listing pages.
+  newestUploadedAt: string;
 };
 
 // Cloudinary parent folders. Two top-level folders organise the work
@@ -89,6 +93,7 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
     width: r.width,
     height: r.height,
     format: r.format,
+    uploaded_at: r.uploaded_at,
     tags: r.tags ?? [],
     context: r.context?.custom ?? {},
   }));
@@ -109,6 +114,9 @@ async function fetchAlbums(): Promise<Album[]> {
       if (images.length === 0) continue;
 
       const cover = images.find((i) => i.tags?.includes('cover')) ?? images[0];
+      // Images come back sorted uploaded_at desc, so images[0] carries
+      // the most recent upload time for this album.
+      const newestUploadedAt = images[0].uploaded_at ?? '';
 
       out.push({
         slug: slugFromFolder(sub),
@@ -116,9 +124,16 @@ async function fetchAlbums(): Promise<Album[]> {
         category,
         cover,
         images,
+        newestUploadedAt,
       });
     }
   }
+
+  // Sort albums newest-first by their most recent image upload, so
+  // the listing pages (/albums, /projects) surface fresh work at the
+  // top. ISO 8601 strings sort lexicographically by year → month → …,
+  // so a plain localeCompare gives chronological order.
+  out.sort((a, b) => b.newestUploadedAt.localeCompare(a.newestUploadedAt));
 
   return out;
 }
