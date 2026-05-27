@@ -26,10 +26,23 @@ const { album } = Astro.props;
 // arrived from the flat home grid (/) instead — so this is just the
 // sensible fallback for direct loads / shared links.
 const backHref = categoryListingPath(album.category);
+
+// SEO: per-series description + the album's own cover as OG image so
+// link previews show the actual series, not a generic fallback.
+const seriesNoun = album.category === 'album' ? 'album' : 'project';
+const description = `${album.title} — a photo ${seriesNoun} by Simon Lürwer, photographer based in Hamburg, Germany. ${album.images.length} images.`;
+const ogImage = cldUrl(album.cover.public_id, {
+  w: 1200,
+  h: 630,
+  crop: 'fill',
+  q: 'auto:best',
+});
 ---
 
 <Base
-  title={`${album.title} — imgs.wtf`}
+  title={`${album.title} — Simon Lürwer Photography`}
+  description={description}
+  ogImage={ogImage}
   albumHeader={{ title: album.title, backHref, count: album.images.length }}
 >
   <section class="justified">

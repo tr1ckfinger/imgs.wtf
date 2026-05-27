@@ -4,9 +4,27 @@ import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const all = await getAlbums();
 const projects = all.filter((a) => a.category === 'project');
+
+// Pick the freshest project's cover for the link preview image.
+const ogImage =
+  projects.length > 0
+    ? cldUrl(projects[0].cover.public_id, {
+        w: 1200,
+        h: 630,
+        crop: 'fill',
+        q: 'auto:best',
+      })
+    : undefined;
+
+const description =
+  'Photo projects by Simon Lürwer — themed series and commissioned work from Hamburg, Germany.';
 ---
 
-<Base title="prjcts — imgs.wtf">
+<Base
+  title="Projects — Simon Lürwer Photography"
+  description={description}
+  ogImage={ogImage}
+>
   <section class="grid">
     {projects.map((project) => (
       <a

@@ -35,9 +35,30 @@ for (const album of albums) {
 // Order is randomized client-side so it persists across refreshes within
 // the same tab (session) and only resets when a new session starts.
 // See the inline shuffle script below.
+
+// SEO: derive an Open Graph image from the freshest album's cover. The
+// `albums` list comes back sorted newest-first, so albums[0].cover is
+// the most recently updated work — keeps the link preview fresh as new
+// series go up.
+const ogImage =
+  albums.length > 0
+    ? cldUrl(albums[0].cover.public_id, {
+        w: 1200,
+        h: 630,
+        crop: 'fill',
+        q: 'auto:best',
+      })
+    : undefined;
+
+const description =
+  'Photography by Simon Lürwer — street photography, portraits, and personal projects from Hamburg, Germany. Fotografie aus Hamburg.';
 ---
 
-<Base title="imgs.wtf">
+<Base
+  title="Simon Lürwer · Photography from Hamburg"
+  description={description}
+  ogImage={ogImage}
+>
   <section class="justified">
     {all.map((img) => {
       const aspect = img.width / img.height;

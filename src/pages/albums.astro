@@ -4,9 +4,28 @@ import { getAlbums, cldUrl, albumHref } from '../lib/cloudinary';
 
 const all = await getAlbums();
 const albums = all.filter((a) => a.category === 'album');
+
+// Pick the freshest album's cover as the OG image so link previews
+// show recent work instead of a stale shot.
+const ogImage =
+  albums.length > 0
+    ? cldUrl(albums[0].cover.public_id, {
+        w: 1200,
+        h: 630,
+        crop: 'fill',
+        q: 'auto:best',
+      })
+    : undefined;
+
+const description =
+  'Photo albums by Simon Lürwer — personal photography series shot in Hamburg, Germany and abroad.';
 ---
 
-<Base title="albms — imgs.wtf">
+<Base
+  title="Albums — Simon Lürwer Photography"
+  description={description}
+  ogImage={ogImage}
+>
   <section class="grid">
     {albums.map((album) => (
       <a

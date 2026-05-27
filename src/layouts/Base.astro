@@ -1,15 +1,56 @@
 ---
 interface Props {
   title?: string;
+  description?: string;
+  ogImage?: string;
   albumHeader?: { title: string; backHref: string; count: number };
 }
-const { title = 'imgs.wtf', albumHeader } = Astro.props;
+
+// Default SEO copy. Each page can override description / ogImage with
+// something more specific; the defaults catch the long tail.
+const DEFAULT_DESCRIPTION =
+  'Photography by Simon Lürwer — street photography, portraits, and personal projects from Hamburg, Germany. Fotografie aus Hamburg.';
+const DEFAULT_OG_IMAGE = 'https://imgs.wtf/portrait.jpg';
+
+const {
+  title = 'imgs.wtf',
+  description = DEFAULT_DESCRIPTION,
+  ogImage = DEFAULT_OG_IMAGE,
+  albumHeader,
+} = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
 const isHome = path === '/';
 const isAlbums = path === '/albums';
 const isProjects = path === '/projects';
 const isContact = path === '/contact';
+
+// Canonical URL — resolves against Astro.site (set in astro.config).
+// Falls back to the request URL if Astro.site isn't configured.
+const canonical = Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).href
+  : Astro.url.href;
+
+// JSON-LD Person schema describing Simon as the site owner. Google
+// uses this to associate the site with a real person and surface
+// "Simon Lürwer" knowledge-panel-style results.
+const personSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Simon Lürwer',
+  alternateName: 'Simon',
+  url: 'https://imgs.wtf',
+  image: 'https://imgs.wtf/portrait.jpg',
+  jobTitle: 'Photographer',
+  description:
+    'Photographer based in Hamburg, Germany. Street photography, portraits, and personal projects.',
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Hamburg',
+    addressCountry: 'DE',
+  },
+  sameAs: ['https://instagram.com/tr1ckfinger'],
+};
 ---
 
 <!doctype html>
@@ -34,6 +75,47 @@ const isContact = path === '/contact';
          and the chrome follows its background-color transition
          frame-perfectly. -->
     <title>{title}</title>
+
+    <!-- SEO: description is the single most important signal for
+         Google's snippet generation. Keywords meta is largely ignored
+         by Google in 2026 but still parsed by Bing / DuckDuckGo. -->
+    <meta name="description" content={description} />
+    <meta name="author" content="Simon Lürwer" />
+    <meta
+      name="keywords"
+      content="Simon Lürwer, Photography Hamburg, Fotografie Hamburg, Foto Simon, Foto Winterhude, Street Photography Hamburg, Portrait Photography Hamburg, Fotograf Hamburg"
+    />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Open Graph: link previews on iMessage, WhatsApp, Facebook,
+         LinkedIn, Slack, etc. og:image should be ≥1200×630px and an
+         absolute URL — Cloudinary transforms handle both. -->
+    <meta property="og:site_name" content="imgs.wtf" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="de_DE" />
+
+    <!-- Twitter Card: separate spec from OG but most platforms fall
+         back to OG. Specifying both maximises coverage. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Structured data: tells Google "this site belongs to a real
+         photographer named Simon Lürwer based in Hamburg". Powers the
+         knowledge panel / rich result on name searches once Google
+         has crawled and verified. -->
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(personSchema)}
+    />
     <script is:inline>
       (() => {
         const saved = localStorage.getItem('theme');
