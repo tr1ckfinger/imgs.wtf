@@ -19,6 +19,9 @@ type Item = {
 
 const all: Item[] = [];
 for (const album of albums) {
+  // Skip hidden albums — they shouldn't appear in the flat home feed,
+  // even though their /<category>/<slug> page still works directly.
+  if (album.hidden) continue;
   const href = albumHref(album);
   const label = albumLabel(album);
   for (const img of album.images) {

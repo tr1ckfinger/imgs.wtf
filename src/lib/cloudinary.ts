@@ -36,6 +36,12 @@ export type Album = {
   // ISO datetime of the most recently uploaded image in this album.
   // Used to sort albums newest-first on listing pages.
   newestUploadedAt: string;
+  // True if any image in the folder carries the `hidden` tag. Hidden
+  // albums are excluded from /albums, /projects, and the home grid,
+  // but still build a single-series page so the URL works for direct
+  // visits. The series page also emits noindex so Google doesn't pick
+  // it up even if the URL is discovered.
+  hidden: boolean;
 };
 
 // Cloudinary parent folders. Two top-level folders organise the work
@@ -117,6 +123,10 @@ async function fetchAlbums(): Promise<Album[]> {
       // Images come back sorted uploaded_at desc, so images[0] carries
       // the most recent upload time for this album.
       const newestUploadedAt = images[0].uploaded_at ?? '';
+      // Hidden flag: tag any image in the folder with `hidden` to
+      // exclude the whole album from listings + home grid + Google
+      // indexing (the page still works at its URL).
+      const hidden = images.some((i) => i.tags?.includes('hidden'));
 
       out.push({
         slug: slugFromFolder(sub),
@@ -125,6 +135,7 @@ async function fetchAlbums(): Promise<Album[]> {
         cover,
         images,
         newestUploadedAt,
+        hidden,
       });
     }
   }

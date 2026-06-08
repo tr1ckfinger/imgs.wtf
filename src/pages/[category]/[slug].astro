@@ -44,6 +44,7 @@ const ogImage = cldUrl(album.cover.public_id, {
   description={description}
   ogImage={ogImage}
   albumHeader={{ title: album.title, backHref, count: album.images.length }}
+  noindex={album.hidden}
 >
   <section class="justified">
     {album.images.map((img) => {

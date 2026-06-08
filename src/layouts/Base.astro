@@ -4,6 +4,12 @@ interface Props {
   description?: string;
   ogImage?: string;
   albumHeader?: { title: string; backHref: string; count: number };
+  // When true, emits <meta name="robots" content="noindex, nofollow">
+  // so search engines skip this page even if they discover the URL
+  // (sitemap, accidental backlink, social share, etc.). Used for
+  // unlisted ("hidden"-tagged) series pages — the URL still works but
+  // shouldn't surface in Google results.
+  noindex?: boolean;
 }
 
 // Default SEO copy. Each page can override description / ogImage with
@@ -17,6 +23,7 @@ const {
   description = DEFAULT_DESCRIPTION,
   ogImage = DEFAULT_OG_IMAGE,
   albumHeader,
+  noindex = false,
 } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
@@ -79,6 +86,9 @@ const personSchema = {
     <!-- SEO: description is the single most important signal for
          Google's snippet generation. Keywords meta is largely ignored
          by Google in 2026 but still parsed by Bing / DuckDuckGo. -->
+    {noindex && (
+      <meta name="robots" content="noindex, nofollow" />
+    )}
     <meta name="description" content={description} />
     <meta name="author" content="Simon Lürwer" />
     <meta
