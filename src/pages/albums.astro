@@ -53,33 +53,32 @@ const description =
   /* Album listing — same 4-up tile grid the home page used to be,
      kept here as an alternate way in for visitors who prefer to
      browse by series rather than scroll the flat all-photos feed. */
-  /* Gaps mirror the home grid (.justified in index.astro) so the two
-     ways into the photos feel like they share a rhythm — switching
-     between /imgs and /albms doesn't read as "different design". */
+  /* Gaps mirror the inside-series spacing (.justified in
+     [category]/[slug].astro), 3× the home-grid gap — listing the
+     albums feels as deliberately spacious as viewing one. */
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
+    gap: 54px;
     padding-top: 8px;
   }
   @media (max-width: 1200px) {
     .grid { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 900px) {
-    .grid { gap: 10px; }
+    .grid { gap: 30px; }
   }
   @media (max-width: 760px) {
     .grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 500px) {
-    .grid { gap: 6px; }
+    .grid { gap: 18px; }
   }
   .card {
     position: relative;
     display: block;
     aspect-ratio: 4 / 5;
     overflow: hidden;
-    border-radius: 4px;
     background: var(--card-bg);
   }
   .card img {

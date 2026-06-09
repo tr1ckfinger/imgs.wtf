@@ -51,32 +51,32 @@ const description =
 <style>
   /* Projects listing — same 4-up tile grid as the albums listing, kept
      identical so the two ways in (series vs themed/commissioned work)
-     share one visual rhythm. Gaps mirror the home grid (.justified in
-     index.astro). */
+     share one visual rhythm. Gaps mirror the inside-series spacing
+     (3× home-grid) so listing the projects feels as deliberately
+     spacious as viewing one. */
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
+    gap: 54px;
     padding-top: 8px;
   }
   @media (max-width: 1200px) {
     .grid { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 900px) {
-    .grid { gap: 10px; }
+    .grid { gap: 30px; }
   }
   @media (max-width: 760px) {
     .grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 500px) {
-    .grid { gap: 6px; }
+    .grid { gap: 18px; }
   }
   .card {
     position: relative;
     display: block;
     aspect-ratio: 4 / 5;
     overflow: hidden;
-    border-radius: 4px;
     background: var(--card-bg);
   }
   .card img {
