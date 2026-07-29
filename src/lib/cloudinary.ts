@@ -23,6 +23,10 @@ export type CldImage = {
   uploaded_at?: string; // ISO datetime from Cloudinary
   tags?: string[];
   context?: Record<string, string>;
+  // Manual sort weight from the image's `order` context field in
+  // Cloudinary (lower = earlier). Undefined when the field is absent
+  // or non-numeric — those images fall to the back, newest-first.
+  order?: number;
 };
 
 export type AlbumCategory = 'album' | 'project';
@@ -94,15 +98,44 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
     .max_results(500)
     .execute();
 
-  return (res.resources ?? []).map((r: any) => ({
-    public_id: r.public_id,
-    width: r.width,
-    height: r.height,
-    format: r.format,
-    uploaded_at: r.uploaded_at,
-    tags: r.tags ?? [],
-    context: r.context?.custom ?? {},
-  }));
+  const images: CldImage[] = (res.resources ?? []).map((r: any) => {
+    const context = r.context?.custom ?? {};
+    // Manual sort weight: set an `order` context field (a number) on an
+    // image in Cloudinary to pin it to a position. Parsed leniently —
+    // any non-numeric or absent value becomes undefined and the image
+    // falls to the unordered tail.
+    const rawOrder = context.order;
+    const parsedOrder =
+      rawOrder !== undefined && rawOrder !== '' && !isNaN(Number(rawOrder))
+        ? Number(rawOrder)
+        : undefined;
+    return {
+      public_id: r.public_id,
+      width: r.width,
+      height: r.height,
+      format: r.format,
+      uploaded_at: r.uploaded_at,
+      tags: r.tags ?? [],
+      context,
+      order: parsedOrder,
+    };
+  });
+
+  // Stable sort: images with an `order` value come first in ascending
+  // order; images without one keep their current relative position,
+  // which is uploaded_at desc (newest-first) from the Cloudinary query.
+  // Array.prototype.sort is stable in modern V8, so equal-key items
+  // (both unordered, or same order value) preserve the query order.
+  images.sort((a, b) => {
+    const ao = a.order;
+    const bo = b.order;
+    if (ao !== undefined && bo !== undefined) return ao - bo;
+    if (ao !== undefined) return -1; // a is pinned, b isn't → a first
+    if (bo !== undefined) return 1; // b is pinned, a isn't → b first
+    return 0; // neither pinned → keep query order (newest-first)
+  });
+
+  return images;
 }
 
 let albumsPromise: Promise<Album[]> | null = null;
@@ -119,10 +152,17 @@ async function fetchAlbums(): Promise<Album[]> {
       const images = await listImagesInFolder(folderPath);
       if (images.length === 0) continue;
 
-      const cover = images.find((i) => i.tags?.includes('cover')) ?? images[0];
-      // Images come back sorted uploaded_at desc, so images[0] carries
-      // the most recent upload time for this album.
-      const newestUploadedAt = images[0].uploaded_at ?? '';
+      // Cover + album-sort are intentionally independent of the manual
+      // `order` field (which only reorders images WITHIN a series page).
+      // Compute both from upload date so pinning an old image to the top
+      // of a series doesn't also make it the cover or bump the album's
+      // position in the listings.
+      const newestByUpload = images.reduce((newest, img) =>
+        (img.uploaded_at ?? '') > (newest.uploaded_at ?? '') ? img : newest
+      );
+      const cover =
+        images.find((i) => i.tags?.includes('cover')) ?? newestByUpload;
+      const newestUploadedAt = newestByUpload.uploaded_at ?? '';
       // Hidden flag: tag any image in the folder with `hidden` to
       // exclude the whole album from listings + home grid + Google
       // indexing (the page still works at its URL).
