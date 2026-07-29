@@ -99,7 +99,10 @@ async function listImagesInFolder(folderPath: string): Promise<CldImage[]> {
     .execute();
 
   const images: CldImage[] = (res.resources ?? []).map((r: any) => {
-    const context = r.context?.custom ?? {};
+    // The Search API returns context as a flat object ({ order: "80" }),
+    // while the Admin API nests it under `.custom`. Handle both so the
+    // `order` field resolves regardless of which shape Cloudinary sends.
+    const context = r.context?.custom ?? r.context ?? {};
     // Manual sort weight: set an `order` context field (a number) on an
     // image in Cloudinary to pin it to a position. Parsed leniently —
     // any non-numeric or absent value becomes undefined and the image
